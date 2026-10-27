@@ -1,0 +1,2277 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>潮汐方舟 · Tide Ark</title>
+<style>
+/* ============================================================
+   潮汐方舟  Tide Ark  —— 样式
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #05090d;
+  color: #cfe0ea;
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#app {
+  display: grid;
+  grid-template-rows: 52px 1fr 126px;
+  height: 100%;
+}
+
+/* ---------------- 顶栏 ---------------- */
+#hud {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 18px;
+  background: linear-gradient(#0c1a26, #08131c);
+  border-bottom: 1px solid #16293a;
+  position: relative; z-index: 5;
+}
+
+.brand {
+  font-size: 17px; letter-spacing: 3px; font-weight: 700;
+  color: #dff0f8;
+  text-shadow: 0 0 18px rgba(90, 200, 240, .35);
+  white-space: nowrap;
+}
+.brand em {
+  font-style: normal; font-size: 10px; letter-spacing: 2px;
+  color: #4d7f96; margin-left: 8px; font-weight: 400;
+}
+
+.chip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px;
+  background: #0e2130; border: 1px solid #1b374b;
+  font-size: 13px; white-space: nowrap;
+}
+.chip b { color: #f2e2b8; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip .lbl { color: #5d8ba1; font-size: 12px; }
+.chip.wood b { color: #e8c07a; }
+.chip.hp b { color: #86e0b0; }
+.chip.tide b { color: #7fc8e8; }
+
+.bar {
+  width: 108px; height: 7px; border-radius: 4px;
+  background: #0a1620; overflow: hidden;
+  box-shadow: inset 0 0 0 1px #14293a;
+}
+.bar i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #37c98f, #8ff0c4);
+  transition: width .25s ease;
+}
+.bar.tide i { background: linear-gradient(90deg, #2f8fb5, #8fe4ff); }
+.bar.low i { background: linear-gradient(90deg, #d1553f, #f3a06a); }
+
+.spacer { flex: 1; }
+
+#phaseTag {
+  font-size: 12px; letter-spacing: 1px; color: #7fb6cc;
+  padding: 4px 10px; border-radius: 6px;
+  background: rgba(40, 120, 150, .14);
+  border: 1px solid rgba(60, 150, 180, .28);
+}
+
+/* ---------------- 舞台 ---------------- */
+#stage {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px; min-height: 0;
+  background: radial-gradient(ellipse at 50% 0%, #0d2130 0%, #05090d 70%);
+}
+canvas#cv {
+  display: block;
+  max-width: 100%; max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .75), 0 0 0 1px #14293a;
+  cursor: default;
+}
+canvas#cv.placing { cursor: crosshair; }
+
+#preview {
+  position: absolute; left: 22px; top: 18px;
+  padding: 8px 12px; border-radius: 8px;
+  background: rgba(8, 20, 29, .82);
+  border: 1px solid #1d3a4d;
+  font-size: 12px; line-height: 1.7; color: #9dc4d6;
+  pointer-events: none; max-width: 340px;
+  backdrop-filter: blur(3px);
+}
+#preview .k { color: #6fa3ba; }
+#preview b { color: #ffcf8a; }
+#preview .warn { color: #ff8b6b; }
+
+/* ---------------- 底部坞 ---------------- */
+#dock {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(#08131c, #0a1824);
+  border-top: 1px solid #16293a;
+  position: relative; z-index: 5;
+}
+
+#palette {
+  display: flex; gap: 7px; flex: 1;
+  overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+#palette::-webkit-scrollbar { height: 6px; }
+#palette::-webkit-scrollbar-thumb { background: #1d3a4d; border-radius: 3px; }
+
+.card {
+  position: relative;
+  flex: 0 0 78px; width: 78px; height: 100px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 2px; padding: 7px 4px 5px;
+  border-radius: 9px;
+  background: linear-gradient(#12222f, #0c1922);
+  border: 1px solid #1d3446;
+  color: #b9d4e2;
+  cursor: pointer;
+  transition: transform .1s, border-color .15s, box-shadow .15s, background .15s;
+  font-family: inherit;
+}
+.card:hover { transform: translateY(-3px); border-color: #3a6a86; }
+.card.selected {
+  border-color: #ffcf8a;
+  box-shadow: 0 0 0 1px #ffcf8a, 0 0 22px rgba(255, 200, 120, .3);
+  background: linear-gradient(#1d2c33, #14212a);
+}
+.card.off { opacity: .38; cursor: not-allowed; }
+.card.off:hover { transform: none; border-color: #1d3446; }
+.card canvas { display: block; width: 34px; height: 34px; }
+.card .nm { font-size: 12px; letter-spacing: .5px; line-height: 1.1; }
+.card .cost {
+  font-size: 11px; color: #e8c07a; font-variant-numeric: tabular-nums;
+}
+.card .cost.free { color: #86e0b0; }
+.card .badge {
+  position: absolute; top: 3px; right: 4px;
+  font-size: 10px; padding: 0 5px; border-radius: 8px;
+  background: #2c7a5b; color: #d8ffef; line-height: 15px;
+  display: none;
+}
+.card .badge.on { display: block; }
+
+#actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+#actions .row { display: flex; gap: 6px; }
+
+button.btn {
+  font-family: inherit; font-size: 13px; letter-spacing: .5px;
+  padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid #24455c; background: #102232; color: #a8c8d9;
+  transition: .15s; white-space: nowrap;
+}
+button.btn:hover { background: #17334a; border-color: #376b8a; color: #d9eefb; }
+button.btn:active { transform: translateY(1px); }
+button.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+button.primary {
+  background: linear-gradient(#1f6f8f, #16546e);
+  border-color: #3d9bc0; color: #eafaff;
+  font-size: 15px; font-weight: 700; letter-spacing: 2px;
+  box-shadow: 0 0 24px rgba(60, 170, 210, .28);
+}
+button.primary:hover {
+  background: linear-gradient(#2580a4, #1a6585);
+  box-shadow: 0 0 34px rgba(70, 190, 235, .45);
+}
+button.danger { border-color: #6d3b36; color: #e0a79c; }
+
+/* ---------------- 弹窗 ---------------- */
+#modal {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 8, 12, .78);
+  backdrop-filter: blur(4px);
+  animation: fade .18s ease;
+}
+#modal.hidden { display: none; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.modal-box {
+  width: min(760px, 92vw);
+  max-height: 86vh; overflow-y: auto;
+  padding: 26px 28px 24px;
+  border-radius: 14px;
+  background: linear-gradient(#0f1e2a, #0a151d);
+  border: 1px solid #224355;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .04);
+  animation: pop .22s cubic-bezier(.2, 1.3, .5, 1);
+}
+@keyframes pop { from { transform: translateY(14px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.modal-box h2 {
+  margin: 0 0 4px; font-size: 22px; letter-spacing: 3px; color: #e6f4fb;
+  font-weight: 700;
+}
+.modal-box .sub { color: #6f9db4; font-size: 13px; margin-bottom: 18px; letter-spacing: .5px; }
+.modal-box p { line-height: 1.9; color: #9dc0d2; font-size: 14px; margin: 8px 0; }
+.modal-box .hl { color: #ffcf8a; }
+.modal-box .ok { color: #86e0b0; }
+.modal-box .bad { color: #ff9c86; }
+
+.picks { display: flex; gap: 14px; margin: 18px 0 6px; }
+.pick {
+  flex: 1; padding: 16px 14px; border-radius: 11px;
+  background: linear-gradient(#14252f, #0e1c25);
+  border: 1px solid #234454; cursor: pointer;
+  transition: .16s; text-align: center; position: relative;
+}
+.pick:hover {
+  border-color: #ffcf8a; transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(255, 190, 110, .16);
+  background: linear-gradient(#1c2f39, #12222c);
+}
+.pick canvas { display: block; margin: 2px auto 8px; width: 44px; height: 44px; }
+.pick .pn { font-size: 15px; color: #e7f5fd; letter-spacing: 1px; font-weight: 700; }
+.pick .pd { font-size: 12px; color: #7fa9bd; margin-top: 7px; line-height: 1.6; min-height: 38px; }
+.pick .pt {
+  position: absolute; top: 9px; left: 10px; font-size: 10px;
+  color: #5f8ea4; letter-spacing: 1px;
+  border: 1px solid #26485b; border-radius: 4px; padding: 1px 5px;
+}
+.pick.big .pn { font-size: 20px; }
+
+.infogrid { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; margin: 14px 0; font-size: 13.5px; }
+.infogrid .k { color: #6f9db4; }
+.infogrid .v { color: #cfe6f2; }
+
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* ---------------- 提示 ---------------- */
+#tip {
+  position: fixed; z-index: 60; pointer-events: none;
+  max-width: 240px; padding: 9px 12px; border-radius: 8px;
+  background: rgba(6, 16, 23, .95);
+  border: 1px solid #2a4f65;
+  font-size: 12px; line-height: 1.6; color: #b8d6e4;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+  opacity: 0; transition: opacity .12s;
+}
+#tip.on { opacity: 1; }
+#tip .tn { color: #ffcf8a; font-size: 13px; letter-spacing: 1px; margin-bottom: 3px; }
+#tip .td { color: #8fb6c8; }
+#tip .tc { color: #e8c07a; margin-top: 4px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%) translateY(8px);
+  z-index: 70; padding: 9px 20px; border-radius: 999px;
+  background: rgba(10, 24, 33, .95); border: 1px solid #2f5b72;
+  color: #d9edf7; font-size: 13px; letter-spacing: 1px;
+  opacity: 0; transition: .22s; pointer-events: none;
+}
+#toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 帮助键 */
+.hintline {
+  color: #4f7d92; font-size: 12px; letter-spacing: .5px; margin-top: 10px;
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="hud">
+    <div class="brand">潮汐方舟<em>TIDE ARK</em></div>
+    <div class="chip"><span class="lbl">潮汐</span><b id="sWave">1 / 8</b></div>
+    <div class="chip wood"><span class="lbl">木材</span><b id="sWood">40</b></div>
+    <div class="chip hp"><span class="lbl">耐久</span><b id="sHp">160 / 160</b>
+      <div class="bar" id="hpBar"><i style="width:100%"></i></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="chip tide"><span class="lbl">潮位</span><div class="bar tide"><i id="tideFill" style="width:0%"></i></div></div>
+    <div id="phaseTag">建造</div>
+  </header>
+
+  <main id="stage">
+    <canvas id="cv" width="1120" height="560"></canvas>
+    <div id="preview"></div>
+  </main>
+
+  <footer id="dock">
+    <div id="palette"></div>
+    <div id="actions">
+      <div class="row">
+        <button class="btn" id="btnDive">下潜 +25木</button>
+        <button class="btn" id="btnHelp">玩法</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnSpeed" style="display:none">1×</button>
+        <button class="btn primary" id="btnTide">涨 潮 ▶</button>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<div id="modal" class="hidden"><div class="modal-box" id="modalBox"></div></div>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+/* ==== data.js ==== */
+﻿/* ============================================================
+   潮汐方舟  Tide Ark
+   data.js —— 纯数值与内容表（无 DOM 依赖）
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  /* ---------- 舞台几何 ---------- */
+  var CELL = 58;
+  var COLS = 6;
+  var ROWS = 3;
+  var VIEW_W = 1120;
+  var VIEW_H = 560;
+  var RAFT_W = COLS * CELL;                 // 348
+  var RAFT_X = (VIEW_W - RAFT_W) / 2;       // 386
+  var RAFT_Y = 268;
+  var RAFT_H = ROWS * CELL;                 // 174
+  var WATER_LOW = RAFT_Y + 2 * CELL;        // 384 低潮水位
+  var WATER_HIGH = 300;                     // 满潮水位
+  var FLOOD_Y = RAFT_Y + CELL;              // 326 超过这里主甲板进水
+
+  var ROW_LANE = ['air', 'surface', 'under'];
+  var ROW_NAME = ['高空甲板', '主甲板', '水下舱'];
+
+  /* ---------- 模块 ----------
+     row   只能放在这一行（行 = 能打到哪条泳道）
+     kind  weapon 武器 / utility 功能
+     lane  weapon 的目标泳道，any = 全泳道
+     range 以"列"为单位的半径（1 列 = 58px）
+     radius 范围伤害半径(px)   chain 连锁目标数
+     effect 功能模块效果：power 整层供电 / mag 相邻增伤 / pump 潮速 / armor 耐久 / salvage 打捞 */
+  var MODULES = {
+    /* ---- row 0 高空甲板 ---- */
+    flak: {
+      name: '高射炮', row: 0, kind: 'weapon', lane: 'air', cost: 16,
+      dmg: 15, cd: 0.8, range: 6, color: '#7fc8e8', icon: 'flak',
+      desc: '对空 · 射程 6 列 · 15 伤害'
+    },
+    salvage: {
+      name: '打捞臂', row: 0, kind: 'utility', effect: 'salvage', cost: 15,
+      color: '#d4a373', icon: 'salvage',
+      desc: '每波结束额外 +8 木材'
+    },
+
+    /* ---- row 1 主甲板 ---- */
+    ballista: {
+      name: '弩炮', row: 1, kind: 'weapon', lane: 'surface', cost: 12,
+      dmg: 16, cd: 1.05, range: 6, color: '#e0a458', icon: 'bolt',
+      desc: '对海 · 射程 6 列 · 16 伤害'
+    },
+    flamer: {
+      name: '喷火器', row: 1, kind: 'weapon', lane: 'surface', cost: 18,
+      dmg: 8, cd: 0.3, range: 2.5, radius: 70, color: '#e2703a', icon: 'flame',
+      desc: '对海 · 近距范围灼烧 · 8 伤害'
+    },
+    tesla: {
+      name: '电击塔', row: 1, kind: 'weapon', lane: 'any', cost: 26,
+      dmg: 12, cd: 1.2, range: 4, chain: 3, color: '#f2e06b', icon: 'tesla',
+      desc: '全泳道 · 连锁 3 目标 · 12 伤害'
+    },
+    gen: {
+      name: '发电机', row: -1, kind: 'utility', effect: 'power', cost: 14,
+      color: '#8fd14f', icon: 'gen',
+      desc: '可放任意层 · 为本层全部武器供电（缺电射速 -28%）'
+    },
+    mag: {
+      name: '弹药库', row: 1, kind: 'utility', effect: 'mag', cost: 20,
+      color: '#c9a227', icon: 'mag',
+      desc: '相邻武器伤害 +25%（最多 +50%）'
+    },
+
+    /* ---- row 2 水下舱 ---- */
+    harpoon: {
+      name: '鱼叉炮', row: 2, kind: 'weapon', lane: 'under', cost: 16,
+      dmg: 30, cd: 1.8, range: 6, color: '#9b8ae0', icon: 'harpoon',
+      desc: '对潜 · 射程 6 列 · 30 伤害'
+    },
+    depth: {
+      name: '深水炸弹', row: 2, kind: 'weapon', lane: 'under', cost: 22,
+      dmg: 18, cd: 2.0, range: 4, radius: 90, color: '#6fb7a8', icon: 'depth',
+      desc: '对潜 · 范围伤害 · 18 伤害'
+    },
+    armor: {
+      name: '装甲板', row: 2, kind: 'utility', effect: 'armor', cost: 18,
+      color: '#9aa5b1', icon: 'armor',
+      desc: '木筏耐久上限 +40'
+    },
+    pump: {
+      name: '抽水泵', row: 2, kind: 'utility', effect: 'pump', cost: 20,
+      color: '#5bb3d1', icon: 'pump',
+      desc: '潮水上涌速度 -10%（最多 -30%）'
+    }
+  };
+
+  var ORDER = ['ballista', 'flamer', 'tesla', 'gen', 'mag', 'flak', 'salvage', 'harpoon', 'depth', 'armor', 'pump'];
+
+  /* ---------- 敌人 ---------- */
+  var ENEMIES = {
+    drifter: { name: '漂流者', lane: 'surface', hp: 34, spd: 64, dmg: 5, r: 16, color: '#79b86a' },
+    shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a' },
+    bat: { name: '潮蝠', lane: 'air', hp: 26, spd: 96, dmg: 4, r: 14, color: '#9b7fd4' },
+    diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9' },
+    raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a' },
+    boss: { name: '潮汐巨兽', lane: 'surface', hp: 520, spd: 18, dmg: 16, r: 50, color: '#e0577f', boss: true }
+  };
+
+  /* ---------- 波次表 ---------- */
+  var WAVE_TABLE = [
+    { dur: 26, comp: [['drifter', 5, 'L']] },
+    { dur: 28, comp: [['drifter', 5, 'L'], ['drifter', 3, 'R']] },
+    { dur: 30, comp: [['drifter', 5, 'L'], ['bat', 3, 'R']] },
+    { dur: 30, comp: [['shellback', 2, 'L'], ['drifter', 4, 'R'], ['bat', 3, 'R']] },
+    { dur: 32, comp: [['diver', 3, 'L'], ['drifter', 4, 'R'], ['bat', 2, 'L']] },
+    { dur: 32, comp: [['shellback', 3, 'R'], ['diver', 3, 'R'], ['bat', 3, 'L'], ['drifter', 4, 'L']] },
+    { dur: 34, comp: [['raider', 1, 'L'], ['shellback', 3, 'R'], ['diver', 3, 'L'], ['bat', 4, 'R']] },
+    { dur: 38, comp: [['boss', 1, 'R'], ['diver', 2, 'L'], ['bat', 2, 'L'], ['drifter', 2, 'R']] }
+  ];
+
+  var MAX_WAVE = WAVE_TABLE.length;
+
+  /* ---------- 确定性随机 ---------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- 生成一波 ---------- */
+  function wavePlan(wave, extraDivers) {
+    var w = WAVE_TABLE[Math.min(wave, MAX_WAVE) - 1];
+    var list = [];
+    w.comp.forEach(function (c) {
+      for (var i = 0; i < c[1]; i++) list.push({ kind: c[0], side: c[2] });
+    });
+    for (var i = 0; i < (extraDivers || 0); i++) {
+      list.push({ kind: 'diver', side: i % 2 ? 'R' : 'L' });
+    }
+
+    /* 打散顺序（固定种子，可复现），Boss 提到最前 */
+    var rnd = mulberry32(1000 + wave * 77);
+    for (var i = list.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var t = list[i]; list[i] = list[j]; list[j] = t;
+    }
+    list.sort(function (a, b) { return (b.kind === 'boss' ? 1 : 0) - (a.kind === 'boss' ? 1 : 0); });
+
+    var n = list.length;
+    var t0 = 1.4, t1 = w.dur * 0.46;
+    list.forEach(function (e, i) {
+      e.t = n <= 1 ? t0 : t0 + (t1 - t0) * (i / (n - 1));
+    });
+
+    var sides = {};
+    list.forEach(function (e) { sides[e.side] = true; });
+
+    return {
+      dur: w.dur,
+      spawns: list,
+      sides: Object.keys(sides).sort(),
+      hpMul: 1 + (wave - 1) * 0.16
+    };
+  }
+
+  /* ---------- 波次预告 ---------- */
+  function wavePreview(wave, extraDivers) {
+    var p = wavePlan(wave, extraDivers || 0);
+    var count = {};
+    p.spawns.forEach(function (s) {
+      count[s.kind] = (count[s.kind] || 0) + 1;
+    });
+    var parts = [];
+    Object.keys(count).forEach(function (k) {
+      parts.push(ENEMIES[k].name + '×' + count[k]);
+    });
+    return {
+      sides: p.sides.map(function (s) { return s === 'L' ? '左舷' : '右舷'; }).join(' + '),
+      text: parts.join(' · ')
+    };
+  }
+
+  root.Data = {
+    CELL: CELL, COLS: COLS, ROWS: ROWS,
+    VIEW_W: VIEW_W, VIEW_H: VIEW_H,
+    RAFT_X: RAFT_X, RAFT_Y: RAFT_Y, RAFT_W: RAFT_W, RAFT_H: RAFT_H,
+    WATER_LOW: WATER_LOW, WATER_HIGH: WATER_HIGH, FLOOD_Y: FLOOD_Y,
+    ROW_LANE: ROW_LANE, ROW_NAME: ROW_NAME,
+    MODULES: MODULES, ORDER: ORDER,
+    ENEMIES: ENEMIES, WAVE_TABLE: WAVE_TABLE, MAX_WAVE: MAX_WAVE,
+    wavePlan: wavePlan, wavePreview: wavePreview, mulberry32: mulberry32
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ==== core.js ==== */
+/* ============================================================
+   潮汐方舟  Tide Ark
+   core.js —— 建造 / 供电 / 潮汐战斗，纯逻辑，零 DOM 依赖
+   （可被 headless 直接跑，用于数值回归）
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  var D = root.Data;
+  var CELL = D.CELL, COLS = D.COLS, ROWS = D.ROWS;
+
+  function idx(col, row) { return row * COLS + col; }
+  function mx(col) { return D.RAFT_X + col * CELL + CELL / 2; }
+  function my(row) { return D.RAFT_Y + row * CELL + CELL / 2; }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  /* ============================================================
+     存档 / 局
+     ============================================================ */
+  function newRun() {
+    var stock = {};
+    D.ORDER.forEach(function (id) { stock[id] = 0; });
+    return {
+      wave: 1,
+      wood: 40,
+      hp: 160,
+      grid: new Array(COLS * ROWS).fill(null),
+      stock: stock,
+      extraDivers: 0,
+      dived: false,
+      over: false,
+      won: false,
+      kills: 0
+    };
+  }
+
+  /* ============================================================
+     派生属性：供电 / 弹药 / 潮速 / 耐久 / 打捞
+     ============================================================ */
+  function cellsOf(run) {
+    var out = [];
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var id = run.grid[idx(c, r)];
+        if (id) out.push({ c: c, r: r, id: id, def: D.MODULES[id] });
+      }
+    }
+    return out;
+  }
+
+  function computeStats(run) {
+    var st = {
+      maxHp: 160,
+      tideMul: 1,
+      powered: {},
+      mag: {},
+      salvage: 0,
+      pumps: 0,
+      rowGen: [false, false, false]
+    };
+    var cells = cellsOf(run);
+
+    cells.forEach(function (x) {
+      var e = x.def.effect;
+      if (e === 'armor') st.maxHp += 40;
+      if (e === 'pump') st.pumps++;
+      if (e === 'salvage') st.salvage += 8;
+      if (e === 'power') st.rowGen[x.r] = true;
+    });
+    st.tideMul = 1 - Math.min(0.3, st.pumps * 0.1);
+
+    /* 供电：发电机为整层供电；弹药库给相邻武器增伤 */
+    cells.forEach(function (x) {
+      if (x.def.kind !== 'weapon') return;
+      st.powered[idx(x.c, x.r)] = st.rowGen[x.r];
+      var m = 0;
+      cells.forEach(function (y) {
+        if (y.def.effect === 'mag' && Math.abs(y.c - x.c) <= 1 && Math.abs(y.r - x.r) <= 1) m++;
+      });
+      st.mag[idx(x.c, x.r)] = Math.min(0.5, m * 0.25);
+    });
+
+    return st;
+  }
+
+  /* ============================================================
+     建造
+     ============================================================ */
+  function costOf(run, id) {
+    return (run.stock[id] || 0) > 0 ? 0 : D.MODULES[id].cost;
+  }
+
+  function canPlace(run, id, col, row) {
+    var def = D.MODULES[id];
+    if (!def) return '未知模块';
+    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return '超出甲板';
+    if (def.row >= 0 && row !== def.row) return def.name + ' 只能放在' + D.ROW_NAME[def.row];
+    if (run.grid[idx(col, row)]) return '这一格已经有东西了';
+    if (costOf(run, id) > run.wood) return '木材不足';
+    return null;
+  }
+
+  function place(run, id, col, row) {
+    var err = canPlace(run, id, col, row);
+    if (err) return err;
+    var cost = costOf(run, id);
+    if (run.stock[id] > 0) run.stock[id]--;
+    run.wood -= cost;
+    run.grid[idx(col, row)] = id;
+    return null;
+  }
+
+  function sell(run, col, row) {
+    var id = run.grid[idx(col, row)];
+    if (!id) return 0;
+    var refund = Math.floor(D.MODULES[id].cost * 0.5);
+    run.wood += refund;
+    run.grid[idx(col, row)] = null;
+    return refund;
+  }
+
+  /* ============================================================
+     战斗
+     ============================================================ */
+  function startBattle(run) {
+    var st = computeStats(run);
+    var plan = D.wavePlan(run.wave, run.extraDivers);
+
+    var b = {
+      run: run,
+      st: st,
+      wave: run.wave,
+      plan: plan,
+      t: 0,
+      tide: 0,
+      tideDur: plan.dur,
+      tideMul: st.tideMul,
+      waterY: D.WATER_LOW,
+      hp: run.hp,
+      maxHp: st.maxHp,
+      enemies: [],
+      queue: plan.spawns.slice(),
+      modules: [],
+      tracers: [],
+      particles: [],
+      texts: [],
+      blasts: [],
+      seq: 1,
+      result: null,
+      enraged: false,
+      killed: 0,
+      dmgDealt: 0,
+      shake: 0,
+      leak: 0,
+      leakByLane: { surface: 0, air: 0, under: 0 },
+      floodShown: false
+    };
+
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var id = run.grid[idx(c, r)];
+        if (!id) continue;
+        b.modules.push({
+          id: id,
+          def: D.MODULES[id],
+          col: c,
+          row: r,
+          x: mx(c),
+          y: my(r),
+          cd: 0,
+          powered: !!st.powered[idx(c, r)],
+          mag: st.mag[idx(c, r)] || 0,
+          flooded: false,
+          flash: 0
+        });
+      }
+    }
+    return b;
+  }
+
+  function laneY(b, lane) {
+    if (lane === 'surface') return b.waterY - 10;
+    if (lane === 'air') return 226;
+    return 470;
+  }
+
+  function spawn(b, s) {
+    var def = D.ENEMIES[s.kind];
+    var hp = def.hp * b.plan.hpMul;
+    b.enemies.push({
+      id: b.seq++,
+      kind: s.kind,
+      def: def,
+      lane: def.lane,
+      side: s.side,
+      x: s.side === 'L' ? -40 : D.VIEW_W + 40,
+      y: laneY(b, def.lane),
+      hp: hp,
+      maxHp: hp,
+      r: def.r,
+      latched: false,
+      enraged: false,
+      bob: Math.random() * 6.283,
+      hit: 0,
+      dead: false,
+      biteCd: 0
+    });
+  }
+
+  function edgeX(side) {
+    return side === 'L' ? D.RAFT_X - 10 : D.RAFT_X + D.RAFT_W + 10;
+  }
+
+  function deadCheck(b) {
+    for (var i = b.enemies.length - 1; i >= 0; i--) {
+      if (b.enemies[i].dead) b.enemies.splice(i, 1);
+    }
+  }
+
+  function burst(b, x, y, color, n, spd) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * 6.283;
+      var v = (0.4 + Math.random()) * (spd || 90);
+      b.particles.push({
+        x: x, y: y,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v - 30,
+        life: 0.35 + Math.random() * 0.35,
+        max: 0.7,
+        color: color,
+        r: 1.5 + Math.random() * 2.5
+      });
+    }
+  }
+
+  function floatText(b, x, y, text, color, size) {
+    b.texts.push({
+      x: x, y: y, text: String(text),
+      color: color || '#fff',
+      size: size || 14,
+      life: 0.85, max: 0.85,
+      vy: -34, vx: (Math.random() - 0.5) * 18
+    });
+  }
+
+  function hurt(b, e, amount, color) {
+    if (e.dead) return;
+    e.hp -= amount;
+    e.hit = 0.14;
+    b.dmgDealt += amount;
+    if (e.hp <= 0) {
+      e.dead = true;
+      b.killed++;
+      burst(b, e.x, e.y, e.def.color, e.def.boss ? 26 : 8, e.def.boss ? 160 : 110);
+      if (!e.def.boss) floatText(b, e.x, e.y - 14, '✦', color || '#ffd479', 15);
+    }
+  }
+
+  function acquire(b, m) {
+    var lane = m.def.lane;
+    var reach = m.def.range * CELL;
+    var best = null, bestScore = Infinity;
+    for (var i = 0; i < b.enemies.length; i++) {
+      var e = b.enemies[i];
+      if (e.dead) continue;
+      if (lane !== 'any' && e.lane !== lane) continue;
+      if (Math.abs(e.x - m.x) > reach) continue;
+      var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
+      if (score < bestScore) { bestScore = score; best = e; }
+    }
+    return best;
+  }
+
+  function fire(b, m, target) {
+    var dmg = m.def.dmg * (1 + m.mag);
+    var hits = [];
+    var i, e;
+
+    if (m.def.radius) {
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead) continue;
+        var dx = e.x - target.x, dy = e.y - target.y;
+        if (dx * dx + dy * dy <= m.def.radius * m.def.radius) hits.push(e);
+      }
+      b.blasts.push({ x: target.x, y: target.y, r: m.def.radius, life: 0.3, max: 0.3, color: m.def.color });
+    } else if (m.def.chain) {
+      var pool = [];
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead) continue;
+        var d2 = (e.x - target.x) * (e.x - target.x) + (e.y - target.y) * (e.y - target.y);
+        if (d2 <= 140 * 140) pool.push({ e: e, d: d2 });
+      }
+      pool.sort(function (a, c) { return a.d - c.d; });
+      for (i = 0; i < pool.length && hits.length < m.def.chain; i++) hits.push(pool[i].e);
+    } else {
+      hits.push(target);
+    }
+
+    for (i = 0; i < hits.length; i++) {
+      hurt(b, hits[i], dmg, m.def.color);
+      b.tracers.push({
+        x1: m.x, y1: m.y,
+        x2: hits[i].x, y2: hits[i].y,
+        life: m.def.chain ? 0.16 : 0.09,
+        max: m.def.chain ? 0.16 : 0.09,
+        color: m.def.color,
+        w: m.def.chain ? 2.4 : 1.6,
+        arc: !!m.def.chain
+      });
+    }
+    m.flash = 0.1;
+    b.tracers.push({
+      x1: m.x, y1: m.y - 6,
+      x2: m.x + (target.x > m.x ? 10 : -10),
+      y2: m.y - 10,
+      life: 0.06, max: 0.06, color: m.def.color, w: 1, arc: false
+    });
+  }
+
+  /* ---------------- 单步推进 ---------------- */
+  function step(b, dt) {
+    if (b.result) return;
+    dt = clamp(dt, 0, 0.05);
+    b.t += dt;
+
+    /* 潮位 */
+    if (b.tide < 1) {
+      b.tide = Math.min(1, b.tide + (dt / b.tideDur) * b.tideMul);
+      if (b.tide >= 1 && !b.enraged) {
+        b.enraged = true;
+        b.enemies.forEach(function (e) { e.enraged = true; });
+        floatText(b, D.VIEW_W / 2, 118, '满 潮 · 敌 群 狂 暴', '#ff8b6b', 26);
+        floatText(b, D.VIEW_W / 2, 148, '海水开始灌进船舱', '#7fc8e8', 15);
+      }
+    }
+    b.waterY = D.WATER_LOW + (D.WATER_HIGH - D.WATER_LOW) * b.tide;
+
+    /* 满潮后持续进水：逼玩家在潮水涨满前清场 */
+    if (b.enraged) {
+      b.hp -= 3.5 * dt;
+      b.leak += 3.5 * dt;
+    }
+
+    var flooded = b.waterY < D.FLOOD_Y;
+    for (var mi = 0; mi < b.modules.length; mi++) {
+      var m = b.modules[mi];
+      m.flooded = (m.row === 1) && flooded;
+      if (m.flash > 0) m.flash -= dt;
+    }
+
+    /* 出场 */
+    while (b.queue.length && b.t >= b.queue[0].t) {
+      spawn(b, b.queue.shift());
+    }
+
+    /* 移动 + 啃咬 */
+    for (var ei = 0; ei < b.enemies.length; ei++) {
+      var e = b.enemies[ei];
+      if (e.dead) continue;
+      if (e.lane === 'surface') e.y = b.waterY - 10;
+      if (e.hit > 0) e.hit -= dt;
+
+      if (!e.latched) {
+        var spd = e.def.spd * (e.enraged ? 1.35 : 1);
+        if (e.side === 'L') {
+          e.x += spd * dt;
+          if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
+        } else {
+          e.x -= spd * dt;
+          if (e.x <= edgeX('R')) { e.x = edgeX('R'); e.latched = true; }
+        }
+      } else {
+        e.biteCd -= dt;
+        if (e.biteCd <= 0) {
+          e.biteCd = 0.55;
+          e.hit = 0.12;
+        }
+        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * dt;
+        b.hp -= bite;
+        b.leak += bite;
+        b.leakByLane[e.lane] += bite;
+        b.shake = Math.min(9, b.shake + dt * 26);
+      }
+    }
+
+    /* 开火 */
+    for (mi = 0; mi < b.modules.length; mi++) {
+      m = b.modules[mi];
+      if (m.def.kind !== 'weapon') continue;
+      if (m.cd > 0) { m.cd -= dt; continue; }
+      var target = acquire(b, m);
+      if (!target) continue;
+      var rate = 1;
+      if (!m.powered) rate *= 1.28;
+      if (m.flooded) rate *= 1.25;
+      m.cd = m.def.cd * rate;
+      fire(b, m, target);
+    }
+
+    deadCheck(b);
+
+    /* 特效衰减 */
+    for (var i = b.particles.length - 1; i >= 0; i--) {
+      var p = b.particles[i];
+      p.life -= dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vy += 260 * dt;
+      p.vx *= (1 - 2.2 * dt);
+      if (p.life <= 0) b.particles.splice(i, 1);
+    }
+    for (i = b.tracers.length - 1; i >= 0; i--) {
+      b.tracers[i].life -= dt;
+      if (b.tracers[i].life <= 0) b.tracers.splice(i, 1);
+    }
+    for (i = b.blasts.length - 1; i >= 0; i--) {
+      b.blasts[i].life -= dt;
+      if (b.blasts[i].life <= 0) b.blasts.splice(i, 1);
+    }
+    for (i = b.texts.length - 1; i >= 0; i--) {
+      var tx = b.texts[i];
+      tx.life -= dt;
+      tx.y += tx.vy * dt;
+      tx.x += tx.vx * dt;
+      tx.vy *= (1 - 1.4 * dt);
+      if (tx.life <= 0) b.texts.splice(i, 1);
+    }
+    b.shake = Math.max(0, b.shake - dt * 22);
+
+    /* 结算 */
+    if (b.hp <= 0) {
+      b.hp = 0;
+      b.result = 'lost';
+      b.run.hp = 0;
+    } else if (b.queue.length === 0 && b.enemies.length === 0) {
+      b.result = 'won';
+      b.run.hp = Math.max(1, Math.round(b.hp));
+    }
+  }
+
+  /* ============================================================
+     奖励 / 打捞
+     ============================================================ */
+  function rewardWood(run, b) {
+    var base = 12 + Math.round(run.wave * 2.5);
+    var salvage = b ? b.st.salvage : computeStats(run).salvage;
+    return base + salvage;
+  }
+
+  /* 一波结束后的资源结算：木材 + 自动修复 */
+  function afterWave(run, b) {
+    var wood = rewardWood(run, b);
+    run.wood += wood;
+    var st = computeStats(run);
+    var want = 14 + run.wave * 2;
+    var before = run.hp;
+    run.hp = Math.min(st.maxHp, run.hp + want);
+    return { wood: wood, heal: Math.round(run.hp - before) };
+  }
+
+  function rollCards(run) {
+    var rnd = Math.random;
+    var pool = D.ORDER.slice();
+    var picks = [];
+    var take = function () {
+      var i = Math.floor(rnd() * pool.length);
+      return pool.splice(i, 1)[0];
+    };
+    picks.push({ type: 'module', id: take() });
+    picks.push({ type: 'module', id: take() });
+    var roll = rnd();
+    if (roll < 0.42) picks.push({ type: 'wood', amt: 38 });
+    else if (roll < 0.72) picks.push({ type: 'repair', amt: 45 });
+    else picks.push({ type: 'module', id: take() });
+    /* 打乱位置 */
+    for (var i = picks.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var t = picks[i]; picks[i] = picks[j]; picks[j] = t;
+    }
+    return picks;
+  }
+
+  function applyCard(run, card) {
+    if (card.type === 'module') {
+      run.stock[card.id] = (run.stock[card.id] || 0) + 1;
+    } else if (card.type === 'wood') {
+      run.wood += card.amt;
+    } else if (card.type === 'repair') {
+      var max = computeStats(run).maxHp;
+      run.hp = Math.min(max, run.hp + card.amt);
+    }
+  }
+
+  root.Core = {
+    idx: idx, mx: mx, my: my,
+    newRun: newRun, cellsOf: cellsOf, computeStats: computeStats,
+    costOf: costOf, canPlace: canPlace, place: place, sell: sell,
+    startBattle: startBattle, step: step,
+    rewardWood: rewardWood, afterWave: afterWave, rollCards: rollCards, applyCard: applyCard,
+    edgeX: edgeX
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ==== app.js ==== */
+﻿/* ============================================================
+   潮汐方舟  Tide Ark
+   app.js —— 渲染 / 交互 / 流程
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var D = window.Data, C = window.Core;
+  var W = D.VIEW_W, H = D.VIEW_H;
+  var CELL = D.CELL;
+
+  var cv = document.getElementById('cv');
+  var g = cv.getContext('2d');
+
+  var S = {
+    run: C.newRun(),
+    phase: 'build',
+    battle: null,
+    sel: null,
+    hoverCell: null,
+    mouse: { x: -999, y: -999 },
+    speed: 1,
+    endTimer: 0,
+    t: 0,
+    reward: null,
+    started: false,
+    log: []
+  };
+
+  /* ================= 工具 ================= */
+  function $(id) { return document.getElementById(id); }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function hexA(h, a) {
+    var n = parseInt(h.slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  var toastTimer = 0;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('on'); }, 1400);
+  }
+
+  /* ================= 图标 ================= */
+  function drawIcon(ctx, id, cx, cy, s, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.3, s * 0.1);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    var k = s / 20;
+
+    switch (id) {
+      case 'bolt':
+        ctx.beginPath(); ctx.arc(-7 * k, 0, 9 * k, -1.15, 1.15); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-9 * k, 0); ctx.lineTo(9 * k, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(4 * k, -4 * k); ctx.lineTo(10 * k, 0); ctx.lineTo(4 * k, 4 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'flame':
+        ctx.beginPath();
+        ctx.moveTo(0, -10 * k);
+        ctx.bezierCurveTo(8 * k, -3 * k, 7 * k, 8 * k, 0, 9 * k);
+        ctx.bezierCurveTo(-7 * k, 8 * k, -8 * k, -3 * k, 0, -10 * k);
+        ctx.closePath();
+        ctx.globalAlpha = 0.9; ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.moveTo(0, 1 * k); ctx.lineTo(5 * k, -3 * k); ctx.stroke();
+        break;
+      case 'flak':
+        ctx.beginPath(); ctx.moveTo(-8 * k, 8 * k); ctx.lineTo(8 * k, 8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-2 * k, 8 * k); ctx.lineTo(-6 * k, -8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(2 * k, 8 * k); ctx.lineTo(6 * k, -8 * k); ctx.stroke();
+        break;
+      case 'harpoon':
+        ctx.beginPath(); ctx.moveTo(-9 * k, 7 * k); ctx.lineTo(6 * k, -6 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(6 * k, -6 * k); ctx.lineTo(9 * k, -9 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(2 * k, -2 * k); ctx.lineTo(0, -7 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(1 * k, -1 * k); ctx.lineTo(6 * k, 1 * k); ctx.stroke();
+        break;
+      case 'depth':
+        rr(ctx, -6 * k, -7 * k, 12 * k, 14 * k, 3 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-4 * k, -7 * k); ctx.lineTo(-4 * k, -10 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(4 * k, -7 * k); ctx.lineTo(4 * k, -10 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-6 * k, 2 * k); ctx.lineTo(-10 * k, 4 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(6 * k, 2 * k); ctx.lineTo(10 * k, 4 * k); ctx.stroke();
+        break;
+      case 'tesla':
+        ctx.beginPath();
+        ctx.moveTo(2 * k, -10 * k); ctx.lineTo(-5 * k, 1 * k); ctx.lineTo(0, 1 * k);
+        ctx.lineTo(-2 * k, 10 * k); ctx.lineTo(6 * k, -2 * k); ctx.lineTo(1 * k, -2 * k);
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'gen':
+        rr(ctx, -8 * k, -8 * k, 16 * k, 16 * k, 3 * k); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1 * k, -5 * k); ctx.lineTo(-4 * k, 0); ctx.lineTo(0, 0); ctx.lineTo(-1 * k, 5 * k);
+        ctx.lineTo(4 * k, -0 * k); ctx.lineTo(0, -0 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'mag':
+        rr(ctx, -8 * k, -6 * k, 16 * k, 12 * k, 2 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-8 * k, -1 * k); ctx.lineTo(8 * k, -1 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-2 * k, -6 * k); ctx.lineTo(-2 * k, 6 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(3 * k, -6 * k); ctx.lineTo(3 * k, 6 * k); ctx.stroke();
+        break;
+      case 'armor':
+        ctx.beginPath();
+        ctx.moveTo(0, -9 * k); ctx.lineTo(8 * k, -5 * k); ctx.lineTo(8 * k, 3 * k);
+        ctx.quadraticCurveTo(8 * k, 8 * k, 0, 10 * k);
+        ctx.quadraticCurveTo(-8 * k, 8 * k, -8 * k, 3 * k);
+        ctx.lineTo(-8 * k, -5 * k); ctx.closePath();
+        ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+        break;
+      case 'pump':
+        ctx.beginPath(); ctx.arc(0, 0, 8 * k, 0, 6.283); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -7 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6 * k, 3.5 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6 * k, 3.5 * k); ctx.stroke();
+        break;
+      case 'salvage':
+        ctx.beginPath(); ctx.moveTo(-9 * k, 9 * k); ctx.lineTo(-9 * k, -8 * k); ctx.lineTo(6 * k, -8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(6 * k, -8 * k); ctx.lineTo(6 * k, 1 * k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(6 * k, 4 * k, 3.2 * k, -0.5, 3.4); ctx.stroke();
+        break;
+      default:
+        ctx.beginPath(); ctx.arc(0, 0, 7 * k, 0, 6.283); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /* ================= 场景元素 ================= */
+  var STARS = [];
+  var RUINS = [];
+  (function () {
+    var r = D.mulberry32(20261027);
+    for (var i = 0; i < 90; i++) {
+      STARS.push({ x: r() * W, y: r() * 260, s: 0.5 + r() * 1.4, a: 0.15 + r() * 0.6, p: r() * 6.28 });
+    }
+    for (var j = 0; j < 16; j++) {
+      RUINS.push({
+        x: -40 + j * 78 + r() * 34,
+        w: 20 + r() * 40,
+        h: 26 + r() * 120,
+        t: r()
+      });
+    }
+  })();
+
+  function drawSky(t) {
+    var grd = g.createLinearGradient(0, 0, 0, H * 0.95);
+    grd.addColorStop(0, '#050d15');
+    grd.addColorStop(0.34, '#0b1e30');
+    grd.addColorStop(0.62, '#153348');
+    grd.addColorStop(0.82, '#244554');
+    grd.addColorStop(1, '#2d4a55');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, W, H);
+
+    for (var i = 0; i < STARS.length; i++) {
+      var s = STARS[i];
+      var tw = 0.55 + 0.45 * Math.sin(t * 1.4 + s.p);
+      g.globalAlpha = s.a * tw;
+      g.fillStyle = '#cfe8ff';
+      g.fillRect(s.x, s.y, s.s, s.s);
+    }
+    g.globalAlpha = 1;
+
+    /* 月亮 */
+    var mx = 902, my = 96;
+    var mg = g.createRadialGradient(mx, my, 6, mx, my, 120);
+    mg.addColorStop(0, 'rgba(220,240,255,.30)');
+    mg.addColorStop(0.35, 'rgba(160,210,240,.10)');
+    mg.addColorStop(1, 'rgba(120,180,220,0)');
+    g.fillStyle = mg;
+    g.fillRect(mx - 120, my - 120, 240, 240);
+    g.beginPath(); g.arc(mx, my, 24, 0, 6.283);
+    g.fillStyle = '#dceaf5'; g.fill();
+    g.beginPath(); g.arc(mx - 7, my - 5, 20, 0, 6.283);
+    g.fillStyle = 'rgba(180,205,225,.55)'; g.fill();
+  }
+
+  function drawRuins(t, waterY) {
+    g.fillStyle = '#0a1826';
+    for (var i = 0; i < RUINS.length; i++) {
+      var r = RUINS[i];
+      var base = waterY + 4;
+      g.globalAlpha = 0.85;
+      g.fillRect(r.x, base - r.h, r.w, r.h);
+      /* 几扇亮着的窗 */
+      if (r.h > 70) {
+        g.globalAlpha = 0.35 + 0.15 * Math.sin(t * 0.7 + r.t * 9);
+        g.fillStyle = '#4d8fa8';
+        g.fillRect(r.x + r.w * 0.3, base - r.h + 16, 4, 6);
+        g.fillRect(r.x + r.w * 0.3, base - r.h + 34, 4, 6);
+        g.fillStyle = '#0a1826';
+        g.globalAlpha = 0.85;
+      }
+    }
+    g.globalAlpha = 1;
+  }
+
+  function drawSea(t, waterY) {
+    var grd = g.createLinearGradient(0, waterY, 0, H);
+    grd.addColorStop(0, '#1a5b73');
+    grd.addColorStop(0.22, '#0e3549');
+    grd.addColorStop(0.62, '#071d29');
+    grd.addColorStop(1, '#03090f');
+    g.beginPath();
+    g.moveTo(0, waterY);
+    for (var x = 0; x <= W; x += 6) {
+      g.lineTo(x, waterY + Math.sin(x * 0.011 + t * 1.25) * 3.4 + Math.sin(x * 0.029 - t * 0.85) * 1.7);
+    }
+    g.lineTo(W, H); g.lineTo(0, H); g.closePath();
+    g.fillStyle = grd; g.fill();
+
+    /* 水面高光 */
+    g.save();
+    g.globalAlpha = 0.5;
+    g.strokeStyle = '#8fd8ef';
+    g.lineWidth = 1.4;
+    g.beginPath();
+    for (x = 0; x <= W; x += 6) {
+      var yy = waterY + Math.sin(x * 0.011 + t * 1.25) * 3.4 + Math.sin(x * 0.029 - t * 0.85) * 1.7;
+      if (x === 0) g.moveTo(x, yy); else g.lineTo(x, yy);
+    }
+    g.stroke();
+    g.restore();
+
+    /* 水体里的光斑 */
+    g.save();
+    g.globalAlpha = 0.06;
+    g.fillStyle = '#7fd4f0';
+    for (var i = 0; i < 7; i++) {
+      var bx = ((t * 12 + i * 173) % (W + 200)) - 100;
+      g.beginPath();
+      g.ellipse(bx, waterY + 40 + i * 18, 60, 8, 0, 0, 6.283);
+      g.fill();
+    }
+    g.restore();
+  }
+
+  function drawRaft(t, waterY) {
+    var x = D.RAFT_X, y = D.RAFT_Y, w = D.RAFT_W, h = D.RAFT_H;
+    var bob = Math.sin(t * 0.9) * 2;
+
+    g.save();
+    g.translate(0, bob);
+
+    /* 船体 */
+    g.beginPath();
+    g.moveTo(x - 14, y - 12);
+    g.lineTo(x + w + 14, y - 12);
+    g.lineTo(x + w + 2, y + h + 20);
+    g.quadraticCurveTo(x + w / 2, y + h + 38, x - 2, y + h + 20);
+    g.closePath();
+    g.fillStyle = '#1d1510';
+    g.fill();
+    g.strokeStyle = '#3d2d1f';
+    g.lineWidth = 2;
+    g.stroke();
+
+    /* 三层甲板 */
+    var bands = ['#4a3527', '#402d20', '#33241a'];
+    for (var r = 0; r < D.ROWS; r++) {
+      g.fillStyle = bands[r];
+      g.fillRect(x, y + r * CELL, w, CELL);
+      /* 木板缝 */
+      g.strokeStyle = 'rgba(0,0,0,.22)';
+      g.lineWidth = 1;
+      for (var px = x + 26; px < x + w; px += 27) {
+        g.beginPath(); g.moveTo(px, y + r * CELL); g.lineTo(px, y + (r + 1) * CELL); g.stroke();
+      }
+      g.strokeStyle = 'rgba(140,110,80,.16)';
+      g.beginPath(); g.moveTo(x, y + r * CELL); g.lineTo(x + w, y + r * CELL); g.stroke();
+    }
+
+    /* 立柱 */
+    g.fillStyle = '#2a1e16';
+    for (var c = 0; c <= D.COLS; c++) {
+      g.fillRect(x + c * CELL - 2, y - 10, 4, h + 16);
+    }
+
+    /* 两舷护板 */
+    g.fillStyle = '#543d2c';
+    g.fillRect(x - 12, y - 12, 8, h + 22);
+    g.fillRect(x + w + 4, y - 12, 8, h + 22);
+
+    /* 上沿栏杆 */
+    g.strokeStyle = '#6b4f38';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(x - 6, y - 13);
+    g.lineTo(x + w + 6, y - 13);
+    g.stroke();
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(140,110,80,.5)';
+    for (var q = 0; q <= D.COLS; q++) {
+      g.beginPath();
+      g.moveTo(x + q * CELL, y - 13);
+      g.lineTo(x + q * CELL, y - 2);
+      g.stroke();
+    }
+
+    g.restore();
+    return bob;
+  }
+
+  /* ================= 模块 ================= */
+  function moduleVisual(ctx, def, cx, cy, size, opt) {
+    opt = opt || {};
+    var half = size / 2;
+    rr(ctx, cx - half, cy - half, size, size, 7);
+    ctx.fillStyle = opt.hl ? '#22343f' : '#16232e';
+    ctx.fill();
+    ctx.strokeStyle = def.color;
+    ctx.globalAlpha = opt.flooded ? 0.4 : 0.9;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    drawIcon(ctx, def.icon, cx, cy, size * 0.34, def.color);
+
+    if (opt.flash > 0) {
+      rr(ctx, cx - half, cy - half, size, size, 7);
+      ctx.fillStyle = 'rgba(255,255,255,' + (opt.flash * 4) + ')';
+      ctx.fill();
+    }
+    if (opt.unpowered) {
+      ctx.beginPath();
+      ctx.arc(cx + half - 6, cy - half + 6, 3, 0, 6.283);
+      ctx.fillStyle = '#d1553f';
+      ctx.fill();
+    }
+  }
+
+  function drawModulesBuild(t, bob) {
+    for (var r = 0; r < D.ROWS; r++) {
+      for (var c = 0; c < D.COLS; c++) {
+        var id = S.run.grid[C.idx(c, r)];
+        if (!id) continue;
+        var def = D.MODULES[id];
+        moduleVisual(g, def, D.RAFT_X + c * CELL + CELL / 2, D.RAFT_Y + r * CELL + CELL / 2 + bob, CELL - 10, {});
+      }
+    }
+  }
+
+  function drawModulesBattle(b, bob) {
+    for (var i = 0; i < b.modules.length; i++) {
+      var m = b.modules[i];
+      moduleVisual(g, m.def, m.x, m.y + bob, CELL - 10, {
+        flash: m.flash,
+        flooded: m.flooded,
+        unpowered: !m.powered && m.def.kind === 'weapon'
+      });
+    }
+  }
+
+  /* ================= 敌人 ================= */
+  function drawEnemy(e, t) {
+    var bob = Math.sin(t * 3 + e.bob) * 3;
+    var x = e.x, y = e.y + bob;
+    var col = e.def.color;
+
+    g.save();
+    g.translate(x, y);
+
+    /* 光晕 */
+    var rad = g.createRadialGradient(0, 0, 2, 0, 0, e.r * 2.6);
+    rad.addColorStop(0, hexA(col, 0.34));
+    rad.addColorStop(1, hexA(col, 0));
+    g.fillStyle = rad;
+    g.beginPath(); g.arc(0, 0, e.r * 2.6, 0, 6.283); g.fill();
+
+    var alpha = e.hit > 0 ? 0.55 : 1;
+    g.globalAlpha = alpha;
+
+    if (e.kind === 'bat') {
+      var flap = Math.sin(t * 12 + e.bob) * 0.7;
+      g.fillStyle = col;
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.quadraticCurveTo(-e.r * 2.2, -e.r * (1 + flap), -e.r * 2.6, e.r * 0.5);
+      g.quadraticCurveTo(-e.r * 1.4, e.r * 0.2, 0, e.r * 0.4);
+      g.closePath(); g.fill();
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.quadraticCurveTo(e.r * 2.2, -e.r * (1 + flap), e.r * 2.6, e.r * 0.5);
+      g.quadraticCurveTo(e.r * 1.4, e.r * 0.2, 0, e.r * 0.4);
+      g.closePath(); g.fill();
+      g.beginPath(); g.arc(0, 0, e.r * 0.7, 0, 6.283); g.fill();
+      g.fillStyle = '#0a1a22';
+      g.beginPath(); g.arc(-2, 0, 1.6, 0, 6.283); g.fill();
+      g.beginPath(); g.arc(3, 0, 1.6, 0, 6.283); g.fill();
+    } else if (e.kind === 'diver') {
+      g.fillStyle = col;
+      g.beginPath();
+      g.ellipse(0, 0, e.r * 1.3, e.r * 0.78, 0, 0, 6.283);
+      g.fill();
+      g.beginPath();
+      g.moveTo(-e.r * 1.2, 0);
+      g.lineTo(-e.r * 2.1, -e.r * 0.7);
+      g.lineTo(-e.r * 2.1, e.r * 0.7);
+      g.closePath(); g.fill();
+      g.fillStyle = '#0a1a22';
+      g.beginPath(); g.arc(e.r * 0.55, -e.r * 0.15, 2.2, 0, 6.283); g.fill();
+    } else if (e.kind === 'boss') {
+      /* 触手 */
+      g.strokeStyle = col;
+      g.lineWidth = 6;
+      g.lineCap = 'round';
+      g.globalAlpha = alpha * 0.85;
+      for (var i = 0; i < 5; i++) {
+        var a = -0.5 + i * 0.42;
+        g.beginPath();
+        g.moveTo(0, e.r * 0.5);
+        g.quadraticCurveTo(
+          Math.sin(t * 2 + i) * e.r * 0.7,
+          e.r * (1.1 + 0.3 * Math.sin(t * 2.4 + i)),
+          Math.sin(t * 1.6 + i * 2) * e.r * 1.0,
+          e.r * (1.6 + 0.35 * Math.sin(t * 2 + i))
+        );
+        g.stroke();
+      }
+      g.globalAlpha = alpha;
+      g.fillStyle = col;
+      g.beginPath(); g.arc(0, 0, e.r, 0, 6.283); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.3)';
+      g.beginPath(); g.arc(0, e.r * 0.25, e.r * 0.85, 0, 6.283); g.fill();
+      g.fillStyle = '#fff3c4';
+      g.beginPath(); g.arc(-e.r * 0.35, -e.r * 0.1, e.r * 0.2, 0, 6.283); g.fill();
+      g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.1, e.r * 0.2, 0, 6.283); g.fill();
+      g.fillStyle = '#2a0b14';
+      g.beginPath(); g.arc(-e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
+      g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
+    } else {
+      /* 漂流者 / 甲壳兽 / 掠夺艇 —— 通用软体 */
+      g.fillStyle = col;
+      g.beginPath();
+      g.ellipse(0, 0, e.r * 1.25, e.r * 0.95, 0, 0, 6.283);
+      g.fill();
+      g.beginPath();
+      g.moveTo(-e.r * 0.2, -e.r * 0.9);
+      g.lineTo(0, -e.r * 1.6);
+      g.lineTo(e.r * 0.5, -e.r * 0.8);
+      g.closePath(); g.fill();
+      if (e.kind === 'shellback') {
+        g.strokeStyle = 'rgba(0,0,0,.35)';
+        g.lineWidth = 2;
+        for (var j = -1; j <= 1; j++) {
+          g.beginPath();
+          g.arc(0, 0, e.r * (0.55 + j * 0.22), -0.4, Math.PI + 0.4);
+          g.stroke();
+        }
+      }
+      if (e.kind === 'raider') {
+        g.fillStyle = '#3a1f1c';
+        g.fillRect(-e.r * 1.1, -e.r * 1.7, 4, e.r * 1.6);
+        g.fillStyle = col;
+        g.beginPath();
+        g.moveTo(e.r * 1.1, -e.r * 1.6);
+        g.lineTo(e.r * 1.9, -e.r * 0.6);
+        g.lineTo(e.r * 1.1, -e.r * 0.6);
+        g.closePath(); g.fill();
+      }
+      g.fillStyle = '#f7f2d8';
+      g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.2, e.r * 0.28, 0, 6.283); g.fill();
+      g.fillStyle = '#101c22';
+      g.beginPath(); g.arc(e.r * 0.42, -e.r * 0.2, e.r * 0.14, 0, 6.283); g.fill();
+    }
+
+    g.globalAlpha = 1;
+    g.restore();
+
+    /* 血条 */
+    if (e.hp < e.maxHp) {
+      var bw = e.def.boss ? 96 : Math.max(26, e.r * 2.4);
+      var bx = x - bw / 2, by = y - e.r - (e.def.boss ? 26 : 13);
+      g.fillStyle = 'rgba(0,0,0,.55)';
+      g.fillRect(bx - 1, by - 1, bw + 2, 5);
+      g.fillStyle = e.def.boss ? '#e0577f' : '#7fe0b0';
+      g.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3);
+    }
+
+    /* 咬合提示 */
+    if (e.latched) {
+      g.save();
+      g.globalAlpha = 0.5 + 0.4 * Math.sin(t * 16);
+      g.strokeStyle = '#ff8b6b';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x, y, e.r + 6, 0, 6.283);
+      g.stroke();
+      g.restore();
+    }
+  }
+
+  /* ================= 特效 ================= */
+  function drawFx(b) {
+    var i, p;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (i = 0; i < b.tracers.length; i++) {
+      var tr = b.tracers[i];
+      var a = tr.life / tr.max;
+      g.globalAlpha = a;
+      g.strokeStyle = tr.color;
+      g.lineWidth = tr.w;
+      g.beginPath();
+      if (tr.arc) {
+        var mx0 = (tr.x1 + tr.x2) / 2;
+        var my0 = Math.min(tr.y1, tr.y2) - 18;
+        g.moveTo(tr.x1, tr.y1);
+        g.quadraticCurveTo(mx0, my0, tr.x2, tr.y2);
+      } else {
+        g.moveTo(tr.x1, tr.y1);
+        g.lineTo(tr.x2, tr.y2);
+      }
+      g.stroke();
+    }
+    for (i = 0; i < b.blasts.length; i++) {
+      var bl = b.blasts[i];
+      var k = 1 - bl.life / bl.max;
+      g.globalAlpha = (1 - k) * 0.55;
+      g.strokeStyle = bl.color;
+      g.lineWidth = 2.5 * (1 - k) + 0.6;
+      g.beginPath();
+      g.arc(bl.x, bl.y, bl.r * (0.35 + k * 0.9), 0, 6.283);
+      g.stroke();
+    }
+    g.restore();
+
+    for (i = 0; i < b.particles.length; i++) {
+      p = b.particles[i];
+      g.globalAlpha = Math.max(0, p.life / p.max);
+      g.fillStyle = p.color;
+      g.beginPath();
+      g.arc(p.x, p.y, p.r, 0, 6.283);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    for (i = 0; i < b.texts.length; i++) {
+      var tx = b.texts[i];
+      g.globalAlpha = Math.min(1, tx.life / tx.max * 2.2);
+      g.font = '700 ' + tx.size + 'px "Microsoft YaHei", sans-serif';
+      g.textAlign = 'center';
+      g.fillStyle = 'rgba(0,0,0,.55)';
+      g.fillText(tx.text, tx.x + 1, tx.y + 1);
+      g.fillStyle = tx.color;
+      g.fillText(tx.text, tx.x, tx.y);
+    }
+    g.globalAlpha = 1;
+    g.textAlign = 'left';
+  }
+
+  /* ================= 建造提示 ================= */
+  function drawBuildHints(t, waterY) {
+    var x = D.RAFT_X, y = D.RAFT_Y;
+
+    /* 网格 */
+    g.save();
+    g.strokeStyle = 'rgba(150,210,235,.10)';
+    g.lineWidth = 1;
+    for (var c = 0; c <= D.COLS; c++) {
+      g.beginPath(); g.moveTo(x + c * CELL, y); g.lineTo(x + c * CELL, y + D.RAFT_H); g.stroke();
+    }
+    for (var r = 0; r <= D.ROWS; r++) {
+      g.beginPath(); g.moveTo(x, y + r * CELL); g.lineTo(x + D.RAFT_W, y + r * CELL); g.stroke();
+    }
+
+    /* 选中模块时的可放置高亮 */
+    if (S.sel) {
+      var def = D.MODULES[S.sel];
+      var pulse = 0.10 + 0.06 * Math.sin(t * 4);
+      for (var cc = 0; cc < D.COLS; cc++) {
+        var ok = C.canPlace(S.run, S.sel, cc, def.row) === null;
+        var row = def.row >= 0 ? def.row : 0;
+        if (def.row < 0) continue;
+        g.fillStyle = ok ? 'rgba(130,230,180,' + pulse + ')' : 'rgba(220,90,70,.05)';
+        g.fillRect(x + cc * CELL + 2, y + row * CELL + 2, CELL - 4, CELL - 4);
+      }
+      /* 覆盖范围（跟随鼠标列） */
+      if (S.hoverCell) {
+        var hc = S.hoverCell.col, hr = def.row >= 0 ? def.row : S.hoverCell.row;
+        var cx = x + hc * CELL + CELL / 2;
+        var reach = (def.range || 0) * CELL;
+        if (reach > 0) {
+          g.fillStyle = 'rgba(255,220,150,.10)';
+          g.fillRect(cx - reach, y + hr * CELL, reach * 2, CELL);
+          g.strokeStyle = 'rgba(255,220,150,.35)';
+          g.setLineDash([5, 5]);
+          g.strokeRect(cx - reach, y + hr * CELL, reach * 2, CELL);
+          g.setLineDash([]);
+          /* 两端箭头 */
+          g.fillStyle = 'rgba(255,220,150,.5)';
+          [-1, 1].forEach(function (sgn) {
+            var ax = cx + sgn * reach;
+            g.beginPath();
+            g.moveTo(ax, y + hr * CELL + CELL / 2);
+            g.lineTo(ax - sgn * 9, y + hr * CELL + CELL / 2 - 6);
+            g.lineTo(ax - sgn * 9, y + hr * CELL + CELL / 2 + 6);
+            g.closePath(); g.fill();
+          });
+        }
+      }
+    }
+
+    /* 悬停格 */
+    if (S.hoverCell) {
+      g.strokeStyle = S.sel ? 'rgba(255,220,150,.75)' : 'rgba(150,210,235,.5)';
+      g.lineWidth = 2;
+      g.strokeRect(x + S.hoverCell.col * CELL + 1, y + S.hoverCell.row * CELL + 1, CELL - 2, CELL - 2);
+    }
+    g.restore();
+  }
+
+  /* 水位罩：让木筏看起来是浮在水里 */
+  function drawWaterOverlay(waterY, tide, bob) {
+    var bottom = D.RAFT_Y + D.RAFT_H + 22;
+    if (waterY >= bottom) return;
+    g.save();
+    g.globalAlpha = 0.26;
+    g.fillStyle = '#12657f';
+    g.fillRect(D.RAFT_X - 16, waterY + bob, D.RAFT_W + 32, bottom - waterY);
+    g.globalAlpha = 0.55;
+    g.strokeStyle = '#a8ecff';
+    g.lineWidth = 1.6;
+    g.beginPath();
+    g.moveTo(D.RAFT_X - 16, waterY + bob);
+    g.lineTo(D.RAFT_X + D.RAFT_W + 16, waterY + bob);
+    g.stroke();
+    g.restore();
+
+    /* 进水提示 */
+    if (tide >= 1) {
+      g.save();
+      g.globalAlpha = 0.55 + 0.35 * Math.sin(Date.now() / 180);
+      g.font = '700 15px "Microsoft YaHei", sans-serif';
+      g.fillStyle = '#ff8b6b';
+      g.textAlign = 'center';
+      g.fillText('满潮进水！快清场', W / 2, waterY - 16);
+      g.restore();
+      g.textAlign = 'left';
+    }
+  }
+
+  /* 两侧来袭箭头 */
+  function drawSideArrows(p, t) {
+    if (S.phase !== 'build') return;
+    var sides = p.sides || [];
+    var pulse = 0.62 + 0.3 * Math.sin(t * 3);
+
+    function arrow(side) {
+      var ax = side === 'L' ? 44 : W - 44;
+      var dir = side === 'L' ? 1 : -1;
+      g.save();
+      g.globalAlpha = pulse;
+      g.translate(ax, H * 0.52);
+      g.fillStyle = '#ff9c6b';
+      g.beginPath();
+      g.moveTo(22 * dir, 0);
+      g.lineTo(-10 * dir, -18);
+      g.lineTo(-10 * dir, 18);
+      g.closePath();
+      g.fill();
+      g.restore();
+      g.save();
+      g.globalAlpha = 0.7;
+      g.font = '700 13px "Microsoft YaHei", sans-serif';
+      g.fillStyle = '#ff9c6b';
+      g.textAlign = 'center';
+      g.fillText(side === 'L' ? '左舷' : '右舷', ax, H * 0.52 + 42);
+      g.restore();
+      g.textAlign = 'left';
+    }
+    sides.forEach(arrow);
+  }
+
+  /* ================= 主绘制 ================= */
+  function draw(t) {
+    var inBattle = S.battle && S.phase !== 'build';
+    var b = inBattle ? S.battle : null;
+    var waterY = b ? b.waterY : D.WATER_LOW;
+
+    g.clearRect(0, 0, W, H);
+    g.save();
+    if (b && b.shake > 0.2) {
+      g.translate((Math.random() - 0.5) * b.shake, (Math.random() - 0.5) * b.shake);
+    }
+
+    drawSky(t);
+    drawRuins(t, waterY);
+    drawSea(t, waterY);
+
+    var bob = drawRaft(t, waterY);
+
+    if (b) {
+      drawModulesBattle(b, bob);
+    } else {
+      drawModulesBuild(t, bob);
+      drawBuildHints(t, waterY);
+    }
+
+    if (b) {
+      for (var i = 0; i < b.enemies.length; i++) drawEnemy(b.enemies[i], t);
+      drawFx(b);
+    }
+
+    drawWaterOverlay(waterY, b ? b.tide : 0, bob);
+
+    g.restore();
+
+    /* 暗角 */
+    var vg = g.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,.55)');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, W, H);
+
+    /* 建造阶段的来袭方向 */
+    if (!b) {
+      var preview = D.wavePreview(S.run.wave, S.run.extraDivers);
+      drawSideArrows(preview, t);
+    }
+
+    /* 战斗中顶部血迹 */
+    if (b) {
+      var hpRatio = clamp(b.hp / b.maxHp, 0, 1);
+      if (hpRatio < 0.35) {
+        var red = g.createLinearGradient(0, 0, 0, H);
+        red.addColorStop(0, 'rgba(180,40,30,' + ((0.35 - hpRatio) * 1.3) + ')');
+        red.addColorStop(0.5, 'rgba(180,40,30,0)');
+        g.fillStyle = red;
+        g.fillRect(0, 0, W, H);
+      }
+    }
+  }
+
+  /* ================= UI ================= */
+  var CARD_ELS = {};
+
+  function hasFreeSlot(id) {
+    var def = D.MODULES[id];
+    for (var c = 0; c < D.COLS; c++) {
+      if (def.row < 0) {
+        for (var r = 0; r < D.ROWS; r++) if (!S.run.grid[C.idx(c, r)]) return true;
+      } else if (!S.run.grid[C.idx(c, def.row)]) return true;
+    }
+    return false;
+  }
+
+  function buildPalette() {
+    var pal = $('palette');
+    pal.innerHTML = '';
+    D.ORDER.forEach(function (id) {
+      var def = D.MODULES[id];
+      var btn = document.createElement('button');
+      btn.className = 'card';
+      btn.dataset.id = id;
+      btn.innerHTML = '<span class="badge"></span>' +
+        '<canvas width="34" height="34"></canvas>' +
+        '<span class="nm">' + def.name + '</span>' +
+        '<span class="cost"></span>';
+      pal.appendChild(btn);
+      var ic = btn.querySelector('canvas');
+      var ictx = ic.getContext('2d');
+      drawIcon(ictx, def.icon, 17, 17, 11, def.color);
+      CARD_ELS[id] = btn;
+      btn.addEventListener('click', function () { pickModule(id); });
+    });
+  }
+
+  function pickModule(id) {
+    if (S.phase !== 'build') return;
+    var def = D.MODULES[id];
+    if (!hasFreeSlot(id)) { toast(def.name + ' 没有空位了'); return; }
+    if (C.costOf(S.run, id) > S.run.wood) { toast('木材不足（需要 ' + def.cost + '）'); return; }
+    S.sel = (S.sel === id) ? null : id;
+    syncUI();
+  }
+
+  function syncUI() {
+    var run = S.run;
+    var st = C.computeStats(run);
+    $('sWave').textContent = (S.phase === 'build' && S.started ? run.wave : Math.min(run.wave, D.MAX_WAVE)) + ' / ' + D.MAX_WAVE;
+    $('sWood').textContent = run.wood;
+
+    var hp = S.phase === 'battle' && S.battle ? S.battle.hp : run.hp;
+    var maxHp = S.phase === 'battle' && S.battle ? S.battle.maxHp : st.maxHp;
+    $('sHp').textContent = Math.round(hp) + ' / ' + maxHp;
+    var pct = clamp(hp / maxHp, 0, 1) * 100;
+    var bar = $('hpBar');
+    bar.firstElementChild.style.width = pct + '%';
+    bar.classList.toggle('low', pct < 40);
+
+    $('phaseTag').textContent = S.phase === 'battle' ? '迎战' : (S.phase === 'ending' ? '结算' : '建造');
+
+    /* 手牌 */
+    D.ORDER.forEach(function (id) {
+      var btn = CARD_ELS[id];
+      if (!btn) return;
+      var def = D.MODULES[id];
+      var stock = run.stock[id] || 0;
+      var cost = C.costOf(run, id);
+      var badge = btn.querySelector('.badge');
+      var costEl = btn.querySelector('.cost');
+      if (stock > 0) {
+        badge.textContent = '×' + stock;
+        badge.classList.add('on');
+        costEl.textContent = '库存';
+        costEl.classList.add('free');
+      } else {
+        badge.classList.remove('on');
+        costEl.textContent = def.cost;
+        costEl.classList.remove('free');
+      }
+      var off = (cost > run.wood) || !hasFreeSlot(id) || S.phase !== 'build';
+      btn.classList.toggle('off', off);
+      btn.classList.toggle('selected', S.sel === id);
+    });
+
+    /* 按钮 */
+    $('btnTide').style.display = S.phase === 'build' ? '' : 'none';
+    $('btnDive').style.display = S.phase === 'build' ? '' : 'none';
+    $('btnSpeed').style.display = S.phase === 'battle' ? '' : 'none';
+    $('btnSpeed').textContent = S.speed + '×';
+    $('btnDive').disabled = run.dived || S.phase !== 'build';
+    $('btnDive').textContent = run.dived ? '已下潜' : '下潜 +25木';
+    cv.classList.toggle('placing', !!S.sel && S.phase === 'build');
+    var tb = S.battle && S.phase !== 'build' ? S.battle.tide : 0;
+    $('tideFill').style.width = Math.round(tb * 100) + '%';
+    updatePreview();
+  }
+
+  function updatePreview() {
+    var el = $('preview');
+    if (!S.started) { el.textContent = ''; return; }
+    if (S.phase === 'build') {
+      var pv = D.wavePreview(S.run.wave, S.run.extraDivers);
+      var extra = S.run.extraDivers ? ' <span class="warn">(下潜引来 ' + S.run.extraDivers + ' 只深潜者)</span>' : '';
+      el.innerHTML =
+        '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b></div>' +
+        '<div class="k">来袭：' + pv.text + '</div>' + extra;
+    } else if (S.battle) {
+      el.innerHTML =
+        '<div><span class="k">第 ' + S.battle.wave + ' 次潮汐</span> · 剩 ' + S.battle.enemies.length + ' 敌</div>' +
+        '<div class="k">击杀 ' + S.battle.killed + ' · 潮位 ' + Math.round(S.battle.tide * 100) + '%</div>';
+    } else {
+      el.innerHTML = '';
+    }
+  }
+
+  /* ================= 提示气泡 ================= */
+  function updateTip() {
+    var tip = $('tip');
+    if (S.phase !== 'build' || !S.hoverCell) { tip.classList.remove('on'); return; }
+    var cell = S.hoverCell;
+    var id = S.run.grid[C.idx(cell.col, cell.row)];
+    var html = '';
+    if (id) {
+      var def = D.MODULES[id];
+      html = '<div class="tn" style="color:' + def.color + '">' + def.name + '</div>' +
+        '<div class="td">' + def.desc + '</div>' +
+        '<div class="tc">点击拆除（回收 ' + Math.floor(def.cost * 0.5) + ' 木材）</div>';
+    } else if (S.sel) {
+      var d2 = D.MODULES[S.sel];
+      html = '<div class="tn" style="color:' + d2.color + '">放置：' + d2.name + '</div>' +
+        '<div class="td">' + d2.desc + '</div>' +
+        '<div class="tc">' + D.ROW_NAME[d2.row >= 0 ? d2.row : cell.row] + ' · 花费 ' +
+        (C.costOf(S.run, S.sel) === 0 ? '库存' : C.costOf(S.run, S.sel)) + '</div>';
+    }
+    if (!html) { tip.classList.remove('on'); return; }
+    tip.innerHTML = html;
+    tip.classList.add('on');
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var px = clamp(S.mouse.x + 18, 8, window.innerWidth - tw - 8);
+    var py = clamp(S.mouse.y - th - 14, 8, window.innerHeight - th - 8);
+    tip.style.left = px + 'px';
+    tip.style.top = py + 'px';
+  }
+
+  /* ================= 画布交互 ================= */
+  function toCanvas(ev) {
+    var r = cv.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) / r.width * W, y: (ev.clientY - r.top) / r.height * H };
+  }
+
+  function cellAt(px, py) {
+    var c = Math.floor((px - D.RAFT_X) / CELL);
+    var r = Math.floor((py - D.RAFT_Y) / CELL);
+    if (c < 0 || c >= D.COLS || r < 0 || r >= D.ROWS) return null;
+    return { col: c, row: r };
+  }
+
+  cv.addEventListener('mousemove', function (ev) {
+    var p = toCanvas(ev);
+    S.mouse.x = ev.clientX;
+    S.mouse.y = ev.clientY;
+    S.hoverCell = cellAt(p.x, p.y);
+    updateTip();
+  });
+
+  cv.addEventListener('mouseleave', function () {
+    S.hoverCell = null;
+    $('tip').classList.remove('on');
+  });
+
+  cv.addEventListener('contextmenu', function (ev) {
+    ev.preventDefault();
+    S.sel = null;
+    syncUI();
+  });
+
+  cv.addEventListener('click', function (ev) {
+    if (S.phase !== 'build') return;
+    var p = toCanvas(ev);
+    var cell = cellAt(p.x, p.y);
+    if (!cell) { S.sel = null; syncUI(); return; }
+
+    var id = S.run.grid[C.idx(cell.col, cell.row)];
+
+    if (S.sel) {
+      if (id) { toast('这一格已经有东西了'); return; }
+      var err = C.place(S.run, S.sel, cell.col, cell.row);
+      if (err) { toast(err); return; }
+      if (C.costOf(S.run, S.sel) > S.run.wood) S.sel = null;
+      syncUI();
+      return;
+    }
+
+    if (id) {
+      var refund = C.sell(S.run, cell.col, cell.row);
+      toast('拆除 ' + D.MODULES[id].name + '，回收 ' + refund + ' 木材');
+      syncUI();
+    }
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { S.sel = null; syncUI(); }
+    if (ev.key === ' ') {
+      ev.preventDefault();
+      if (S.phase === 'build') beginBattle();
+    }
+  });
+
+  /* ================= 流程 ================= */
+  function closeModal() { $('modal').classList.add('hidden'); }
+  function openModal(html) {
+    $('modalBox').innerHTML = html;
+    $('modal').classList.remove('hidden');
+  }
+
+  function beginBattle() {
+    if (S.phase !== 'build' || !S.started) return;
+    var weapons = C.cellsOf(S.run).filter(function (x) { return x.def.kind === 'weapon'; });
+    if (weapons.length === 0) { toast('至少放一门武器再开战'); return; }
+    S.sel = null;
+    S.battle = C.startBattle(S.run);
+    S.phase = 'battle';
+    S.speed = 1;
+    syncUI();
+  }
+
+  function resolveBattle() {
+    var b = S.battle;
+    if (b.result === 'lost') { S.phase = 'gameover'; showGameOver(); return; }
+
+    var cleared = S.run.wave;
+    var gain = C.afterWave(S.run, b);
+    S.run.kills += b.killed;
+
+    if (cleared >= D.MAX_WAVE) { S.phase = 'victory'; showVictory(); return; }
+
+    S.reward = {
+      cards: C.rollCards(S.run),
+      wood: gain.wood,
+      heal: gain.heal,
+      cleared: cleared,
+      kills: b.killed
+    };
+    S.run.wave = cleared + 1;
+    S.phase = 'reward';
+    showReward();
+  }
+
+  function cardHTML(card, i) {
+    if (card.type === 'module') {
+      var def = D.MODULES[card.id];
+      return '<div class="pick" data-i="' + i + '">' +
+        '<span class="pt">模块</span>' +
+        '<canvas data-icon="' + card.id + '" width="44" height="44"></canvas>' +
+        '<div class="pn" style="color:' + def.color + '">' + def.name + '</div>' +
+        '<div class="pd">' + def.desc + '</div>' +
+        '</div>';
+    }
+    if (card.type === 'wood') {
+      return '<div class="pick big" data-i="' + i + '">' +
+        '<span class="pt">补给</span>' +
+        '<canvas data-icon="wood" width="44" height="44"></canvas>' +
+        '<div class="pn" style="color:#e8c07a">木材 +' + card.amt + '</div>' +
+        '<div class="pd">从漂浮的残骸里拖回来的建材</div>' +
+        '</div>';
+    }
+    return '<div class="pick big" data-i="' + i + '">' +
+      '<span class="pt">修整</span>' +
+      '<canvas data-icon="repair" width="44" height="44"></canvas>' +
+      '<div class="pn" style="color:#86e0b0">修复 +' + card.amt + '</div>' +
+      '<div class="pd">把漏水的舱室补一补</div>' +
+      '</div>';
+  }
+
+  function showReward() {
+    var r = S.reward;
+    var html = '<h2>第 ' + r.cleared + ' 次潮汐 · 退去</h2>' +
+      '<div class="sub">击杀 ' + r.kills + ' · 木材 +' + r.wood + ' · 修复 +' + r.heal + '</div>' +
+      '<p>潮水退去，海面上浮起一些东西。<span class="hl">挑一件带走。</span></p>' +
+      '<div class="picks">' + r.cards.map(cardHTML).join('') + '</div>';
+    openModal(html);
+
+    Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
+      el.addEventListener('click', function () {
+        var i = parseInt(el.dataset.i, 10);
+        pickCard(i);
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
+      var key = cnv.dataset.icon;
+      var ictx = cnv.getContext('2d');
+      if (key === 'wood') {
+        ictx.fillStyle = '#a97b46';
+        rr(ictx, 8, 14, 28, 12, 3); ictx.fill();
+        ictx.fillStyle = '#c99a5e';
+        rr(ictx, 12, 18, 28, 12, 3); ictx.fill();
+      } else if (key === 'repair') {
+        ictx.strokeStyle = '#86e0b0';
+        ictx.lineWidth = 3;
+        ictx.beginPath();
+        ictx.moveTo(22, 8); ictx.lineTo(22, 36);
+        ictx.moveTo(8, 22); ictx.lineTo(36, 22);
+        ictx.stroke();
+      } else {
+        var d = D.MODULES[key];
+        drawIcon(ictx, d.icon, 22, 22, 14, d.color);
+      }
+    });
+  }
+
+  function pickCard(i) {
+    if (!S.reward) return;
+    C.applyCard(S.run, S.reward.cards[i]);
+    S.reward = null;
+    closeModal();
+    enterBuild();
+  }
+
+  function enterBuild() {
+    S.phase = 'build';
+    S.sel = null;
+    S.battle = null;
+    S.run.dived = false;
+    syncUI();
+  }
+
+  function showGameOver() {
+    var b = S.battle;
+    var totalLeak = b.leak || 1;
+    var laneName = { surface: '海面', air: '空中', under: '水下' };
+    var worst = null, worstVal = -1;
+    Object.keys(b.leakByLane).forEach(function (k) {
+      if (b.leakByLane[k] > worstVal) { worstVal = b.leakByLane[k]; worst = k; }
+    });
+    var share = Math.round((worstVal / totalLeak) * 100);
+
+    var html = '<h2 style="color:#ff9c86">木筏沉没</h2>' +
+      '<div class="sub">第 ' + S.run.wave + ' 次潮汐 · 共击杀 ' + (S.run.kills + b.killed) + '</div>' +
+      '<div class="infogrid">' +
+      '<div class="k">止步于</div><div class="v">第 ' + S.run.wave + ' / ' + D.MAX_WAVE + ' 次潮汐</div>' +
+      '<div class="k">本波击杀</div><div class="v">' + b.killed + '</div>' +
+      '<div class="k">总输出</div><div class="v">' + Math.round(b.dmgDealt) + '</div>' +
+      (worst ? '<div class="k">主要失血</div><div class="v bad">' + laneName[worst] + ' · ' + share + '%</div>' : '') +
+      (worst ? '<div class="k">诊断</div><div class="v">' +
+        (worst === 'surface' ? '对海火力不足或射程没有覆盖到来袭方向'
+          : worst === 'air' ? '高空甲板缺少高射炮，潮蝠直接撞上来了'
+            : '水下舱缺少鱼叉/深水炸弹，深潜者一路啃到船底') + '</div>' : '') +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn primary" id="btnRetry">再来一次</button></div>';
+    openModal(html);
+    $('btnRetry').addEventListener('click', function () { newGame(); });
+  }
+
+  function showVictory() {
+    var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
+      '<div class="sub">你带着这条船活过了 8 次潮汐</div>' +
+      '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
+      '甲板上还留着这一路捞上来、拼起来的东西——那是你亲手造的船。</p>' +
+      '<div class="infogrid">' +
+      '<div class="k">总击杀</div><div class="v">' + S.run.kills + '</div>' +
+      '<div class="k">剩余耐久</div><div class="v ok">' + Math.round(S.run.hp) + '</div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn primary" id="btnAgain">再漂一次</button></div>';
+    openModal(html);
+    $('btnAgain').addEventListener('click', function () { newGame(); });
+  }
+
+  function showHelp(first) {
+    var html = '<h2>' + (first ? '潮汐方舟' : '玩法') + '</h2>' +
+      '<div class="sub">TIDE ARK · 横板构筑 · 自动战斗</div>' +
+      '<p>你有一条破木筏。每次<span class="hl">退潮</span>时打捞、建造；每次<span class="hl">涨潮</span>时海怪扑上来，' +
+      '你的模块自动开火。撑过 <span class="hl">8 次潮汐</span>。</p>' +
+      '<div class="infogrid">' +
+      '<div class="k">三层甲板</div><div class="v">高空甲板只打<b>空中</b>，主甲板只打<b>海面</b>，水下舱只打<b>水下</b></div>' +
+      '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。来袭方向会提前标在画面上（← 左舷 / 右舷 →）</div>' +
+      '<div class="k">射程</div><div class="v">射程按<b>列</b>算。靠边的炮更能覆盖自己这一侧</div>' +
+      '<div class="k">供电</div><div class="v">每层放一台<b>发电机</b>，否则这层武器射速 -28%</div>' +
+      '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，必死</div>' +
+      '</div>' +
+      '<p class="hintline">左键选中模块 → 点格子放置 · 点已有模块可拆除（回收一半） · 右键/Esc 取消 · 空格开战</p>' +
+      '<div class="modal-actions"><button class="btn primary" id="btnStart">' + (first ? '启 航' : '返 回') + '</button></div>';
+    openModal(html);
+    $('btnStart').addEventListener('click', function () {
+      if (first) { closeModal(); S.started = true; newGame(); }
+      else closeModal();
+    });
+  }
+
+  function newGame() {
+    S.run = C.newRun();
+    S.battle = null;
+    S.phase = 'build';
+    S.sel = null;
+    S.started = true;
+    S.reward = null;
+    closeModal();
+    syncUI();
+  }
+
+  /* ================= 按钮 ================= */
+  $('btnTide').addEventListener('click', beginBattle);
+  $('btnSpeed').addEventListener('click', function () {
+    S.speed = S.speed === 1 ? 2 : 1;
+    syncUI();
+  });
+  $('btnDive').addEventListener('click', function () {
+    if (S.phase !== 'build' || S.run.dived) return;
+    S.run.dived = true;
+    S.run.wood += 25;
+    S.run.extraDivers += 2;
+    toast('下潜打捞：+25 木材，但下一次涨潮会多来 2 只深潜者');
+    syncUI();
+  });
+  $('btnHelp').addEventListener('click', function () { showHelp(false); });
+
+  /* ================= 主循环 ================= */
+  var last = performance.now();
+  var acc = 0;
+  var previewAcc = 0;
+
+  function frame(now) {
+    var dt = Math.min(0.045, (now - last) / 1000);
+    last = now;
+    S.t += dt;
+
+    if (S.phase === 'battle' && S.battle) {
+      if (!S.battle.result) {
+        for (var i = 0; i < S.speed; i++) C.step(S.battle, dt);
+        if (S.battle.result) { S.phase = 'ending'; S.endTimer = 1.05; }
+      }
+    } else if (S.phase === 'ending') {
+      S.endTimer -= dt;
+      if (S.endTimer <= 0) resolveBattle();
+    }
+
+    draw(S.t);
+
+    syncUIThrottled(dt);
+    requestAnimationFrame(frame);
+  }
+
+  var uiAcc = 0;
+  function syncUIThrottled(dt) {
+    uiAcc += dt;
+    if (uiAcc > 0.1) {
+      uiAcc = 0;
+      updatePreview();
+      if (S.battle) {
+        /* 战斗中只更新血量/潮位，不重建手牌 */
+        var b = S.battle;
+        if (b) {
+          $('sHp').textContent = Math.round(b.hp) + ' / ' + b.maxHp;
+          var pct = clamp(b.hp / b.maxHp, 0, 1) * 100;
+          $('hpBar').firstElementChild.style.width = pct + '%';
+          $('hpBar').classList.toggle('low', pct < 40);
+          $('tideFill').style.width = Math.round(b.tide * 100) + '%';
+        }
+      } else {
+        $('tideFill').style.width = '0%';
+      }
+    }
+  }
+
+  /* ================= 启动 ================= */
+  buildPalette();
+  syncUI();
+  if (location.search.indexOf('nointro') >= 0) {
+    S.started = true;
+    closeModal();
+    /* 调试：预置一套甲板，便于截图检查 */
+    if (location.search.indexOf('demo') >= 0) {
+      var demo = [[1,1,'ballista'],[2,1,'ballista'],[3,1,'gen'],[0,0,'flak'],[4,0,'flak'],[1,2,'harpoon'],[2,2,'harpoon'],[4,2,'gen']];
+      demo.forEach(function (d) { S.run.grid[C.idx(d[0], d[1])] = d[2]; });
+      var mw = location.search.match(/wave=([0-9]+)/);
+      if (mw) S.run.wave = parseInt(mw[1], 10);
+      if (location.search.indexOf('battle') >= 0) {
+        S.battle = C.startBattle(S.run);
+        S.phase = 'battle';
+        var mSim = location.search.match(/sim=([0-9.]+)/);
+        var simT = mSim ? parseFloat(mSim[1]) : 0;
+        for (var si = 0; si < simT * 60; si++) C.step(S.battle, 1 / 60);
+      }
+      if (location.search.indexOf('reward') >= 0) {
+        S.battle.result = 'won';
+        S.phase = 'ending';
+        resolveBattle();
+      }
+      syncUI();
+    }
+  } else {
+    showHelp(true);
+  }
+  requestAnimationFrame(frame);
+
+  /* 调试入口 */
+  window.__TA = { S: S, C: C, D: D };
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# 浏览器调试缓存
+.edge*/
+.edge2/
+.edge3/
+
+# 临时截图
+shot*.png
+
+# 凭证临时文件
+.cred-tmp.txt
+
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>潮汐方舟 · Tide Ark</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="hud">
+    <div class="brand">潮汐方舟<em>TIDE ARK</em></div>
+    <div class="chip"><span class="lbl">潮汐</span><b id="sWave">1 / 8</b></div>
+    <div class="chip wood"><span class="lbl">木材</span><b id="sWood">40</b></div>
+    <div class="chip hp"><span class="lbl">耐久</span><b id="sHp">160 / 160</b>
+      <div class="bar" id="hpBar"><i style="width:100%"></i></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="chip tide"><span class="lbl">潮位</span><div class="bar tide"><i id="tideFill" style="width:0%"></i></div></div>
+    <div id="phaseTag">建造</div>
+  </header>
+
+  <main id="stage">
+    <canvas id="cv" width="1120" height="560"></canvas>
+    <div id="preview"></div>
+  </main>
+
+  <footer id="dock">
+    <div id="palette"></div>
+    <div id="actions">
+      <div class="row">
+        <button class="btn" id="btnDive">下潜 +25木</button>
+        <button class="btn" id="btnHelp">玩法</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnSpeed" style="display:none">1×</button>
+        <button class="btn primary" id="btnTide">涨 潮 ▶</button>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<div id="modal" class="hidden"><div class="modal-box" id="modalBox"></div></div>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script src="data.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
