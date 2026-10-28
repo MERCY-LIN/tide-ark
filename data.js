@@ -250,6 +250,34 @@
     { id: 'lean', name: '节衣缩食', desc: '木材收益 -30%', mul: 1.5, wood: 0.7 }
   ];
 
+  /* ---------- 成就：长期目标，一次性奖励 ---------- */
+  var ACHIEVEMENTS = [
+    { id: 'first', name: '第一次沉没', desc: '完成一次航程', reward: 20, check: function () { return true; } },
+    { id: 'act1', name: '活着回来', desc: '在第 8 次潮汐后收手', reward: 60, check: function (r, won, full) { return won && r.wave >= ACT1_END; } },
+    { id: 'clear', name: '潮汐平息', desc: '一路下潜并击败潮汐之眼', reward: 150, check: function (r, won, full) { return full; } },
+    { id: 'iron', name: '铁人航程', desc: '签「铁人」契约并通关', reward: 180, check: function (r, won, full) { return full && r.contract && r.contract.id === 'iron'; } },
+    { id: 'noaug', name: '原装船', desc: '不用任何改装件通关', reward: 120, check: function (r, won, full) { return full && Object.keys(r.moduleAug || {}).length === 0; } },
+    { id: 'gun', name: '万炮齐发', desc: '通关时至少 6 台炮击标签的模块', reward: 120, check: function (r, won, full) { return full && runTagCount(r, 'gun') >= 6; } },
+    { id: 'collect', name: '收藏家', desc: '单局拿到 4 件遗物', reward: 100, check: function (r) { return (r.relics || []).length >= 4; } },
+    { id: 'minimal', name: '八格船', desc: '只装 8 台模块并通关', reward: 150, check: function (r, won, full) { return full && moduleCount(r) <= 8; } },
+    { id: 'asc3', name: '风暴行者', desc: '在潮汐刻度 3 以上通关', reward: 220, check: function (r, won, full) { return full && (r.asc || 0) >= 3; } }
+  ];
+
+  function runTagCount(run, tag) {
+    var n = 0;
+    for (var i = 0; i < run.grid.length; i++) {
+      var id = run.grid[i];
+      if (id && TAG_OF[id] === tag) n++;
+    }
+    return n;
+  }
+
+  function moduleCount(run) {
+    var n = 0;
+    for (var i = 0; i < run.grid.length; i++) if (run.grid[i]) n++;
+    return n;
+  }
+
   /* 船坞价格：压舱货舱是递增的长期消耗 */
   function metaCost(u, lv) {
     if (u.id === 'cache') return Math.round(60 * Math.pow(1.35, lv));
@@ -546,6 +574,7 @@
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
     MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META, CONTRACTS: CONTRACTS, metaCost: metaCost,
+    ACHIEVEMENTS: ACHIEVEMENTS, runTagCount: runTagCount, moduleCount: moduleCount,
     AUGMENTS: AUGMENTS, AUG_ORDER: AUG_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE, ACT1_END: ACT1_END,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32

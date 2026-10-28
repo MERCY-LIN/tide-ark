@@ -61,8 +61,39 @@
     var w = S.run.wave || 0;
     if (w > (S.meta.best || 0)) S.meta.best = w;
     S.meta.kills = (S.meta.kills || 0) + (S.run.kills || 0);
+
+    /* 今日挑战成绩 */
+    if (S.dailyRun && S.dailyRun.key) {
+      S.meta.daily = S.meta.daily || {};
+      var dk = S.dailyRun.key;
+      var rec = S.meta.daily[dk] || { best: 0, cleared: false };
+      if (w > rec.best) rec.best = w;
+      if (won) rec.cleared = true;
+      S.meta.daily[dk] = rec;
+    }
+
+    /* 成就 */
+    var got = [];
+    D.ACHIEVEMENTS.forEach(function (a) {
+      S.meta.ach = S.meta.ach || {};
+      if (S.meta.ach[a.id]) return;
+      var ok = false;
+      try { ok = a.check(S.run, won, won && (S.run.wave || 0) >= D.MAX_WAVE); } catch (e) { ok = false; }
+      if (!ok) return;
+      S.meta.ach[a.id] = true;
+      S.meta.wreck = (S.meta.wreck || 0) + a.reward;
+      S.meta.wreck = S.meta.wreck;
+      got.push(a);
+    });
+    S.achGained = got;
     saveMeta();
     return gain;
+  }
+
+  function achievementLine() {
+    if (!S.achGained || !S.achGained.length) return '';
+    var txt = S.achGained.map(function (a) { return a.name + ' +' + a.reward; }).join(' · ');
+    return '<div class="k">成就</div><div class="v ok">' + txt + '</div>';
   }
 
   function rollContractOffers() {
@@ -1541,6 +1572,7 @@
       '<div class="k">本波击杀</div><div class="v">' + b.killed + '</div>' +
       '<div class="k">总输出</div><div class="v">' + Math.round(b.dmgDealt) + '</div>' +
       '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
+      achievementLine() +
       (hasLeak ? '<div class="k">主要失血</div><div class="v bad">' + laneName[worst] + ' · ' + share + '%</div>' : '') +
       (hasLeak ? '<div class="k">诊断</div><div class="v">' +
         (worst === 'surface' ? '对海火力不足或射程没有覆盖到来袭方向'
@@ -1579,6 +1611,7 @@
       '<div class="k">总击杀</div><div class="v">' + S.run.kills + '</div>' +
       '<div class="k">剩余耐久</div><div class="v ok">' + Math.round(S.run.hp) + '</div>' +
       '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
+      achievementLine() +
       (unlocked ? '<div class="k">潮汐刻度</div><div class="v ok">解锁到 ' + S.meta.asc + ' · ' + D.ASC_NAME[S.meta.asc] +
         '（敌人更强，残骸更多）</div>' : '') +
       '</div>' +
@@ -1662,6 +1695,61 @@
     });
   }
 
+  function dailyInfo() {
+    var d = new Date();
+    var key = '' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+    var seed = 0;
+    for (var i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+    var rng = D.mulberry32(seed);
+    var shipPool = D.SHIP_ORDER.filter(function (id) { return id !== 'carrier' || metaLv('carrier'); });
+    var ship = shipPool[Math.floor(rng() * shipPool.length)];
+    var ascMax = Math.min(S.meta.asc || 0, 2);
+    var asc = ascMax > 0 ? (1 + Math.floor(rng() * ascMax)) : 0;
+    if (asc > ascMax) asc = ascMax;
+    var ct = D.CONTRACTS[Math.floor(rng() * D.CONTRACTS.length)];
+    return { key: key, seed: seed, ship: ship, asc: asc, contract: ct };
+  }
+
+  function showDaily() {
+    var d = dailyInfo();
+    var rec = (S.meta.daily || {})[d.key] || { best: 0, cleared: false };
+    var sp = D.SHIPS[d.ship];
+    var ct = d.contract ? d.contract.name + '（' + d.contract.desc + '）' : '无';
+    var html = '<h2>今日挑战</h2>' +
+      '<div class="sub">' + d.key + ' · 同一个日期 = 同一套牌</div>' +
+      '<p>固定的种子、固定的船、固定的刻度与契约。<span class="hl">你只能决定怎么打。</span></p>' +
+      '<div class="infogrid">' +
+      '<div class="k">船</div><div class="v">' + sp.name + '</div>' +
+      '<div class="k">潮汐刻度</div><div class="v">' + d.asc + ' · ' + D.ASC_NAME[d.asc] + '</div>' +
+      '<div class="k">契约</div><div class="v">' + ct + '</div>' +
+      '<div class="k">今日最好</div><div class="v ok">' +
+      (rec.best ? '第 ' + rec.best + ' 波' + (rec.cleared ? ' · 已通关' : '') : '还没打') + '</div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn primary" id="btnDailyGo">开始挑战</button></div>';
+    openModal(html);
+    $('btnDailyGo').addEventListener('click', function () {
+      newGame(d.ship, { seed: d.seed, asc: d.asc, contract: d.contract, daily: { key: d.key } });
+    });
+  }
+
+  function showAchievements() {
+    var done = 0;
+    var rows = D.ACHIEVEMENTS.map(function (a) {
+      var got = S.meta.ach && S.meta.ach[a.id];
+      if (got) done++;
+      return '<div class="achrow' + (got ? ' got' : '') + '">' +
+        '<div class="an">' + a.name + '</div>' +
+        '<div class="ad">' + a.desc + '</div>' +
+        '<div class="ar">' + (got ? '已达成' : '+' + a.reward) + '</div>' +
+        '</div>';
+    }).join('');
+    openModal('<h2>成就</h2><div class="sub">' + done + ' / ' + D.ACHIEVEMENTS.length +
+      ' · 达成后立刻发放残骸</div>' +
+      '<div class="achlist two">' + rows + '</div>' +
+      '<div class="modal-actions"><button class="btn" id="btnAchBack">返 回</button></div>');
+    $('btnAchBack').addEventListener('click', function () { showShipSelect(); });
+  }
+
   function showShipSelect() {
     if (!S.contractOffers) rollContractOffers();
 
@@ -1696,7 +1784,9 @@
       '</div>' +
       '<div class="ctrow"><span class="lbl">契约</span>' + ctHtml +
       '<span class="cthint">自己加难度，换残骸倍率</span></div>' +
-      '<div class="modal-actions"><button class="btn" id="btnDock">船坞</button></div>';
+      '<div class="modal-actions"><button class="btn" id="btnAch">成就</button>' +
+      '<button class="btn" id="btnDaily">今日挑战</button>' +
+      '<button class="btn" id="btnDock">船坞</button></div>';
     openModal(html);
     $('ascDown').addEventListener('click', function () {
       S.asc = Math.max(0, (S.asc || 0) - 1);
@@ -1720,6 +1810,8 @@
       });
     });
     $('btnDock').addEventListener('click', function () { showDock(); });
+    $('btnAch').addEventListener('click', showAchievements);
+    $('btnDaily').addEventListener('click', showDaily);
     Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
       var ictx = cnv.getContext('2d');
       ictx.strokeStyle = '#9dc4d6';
@@ -1733,17 +1825,20 @@
     });
   }
 
-  function newGame(shipId) {
-    S.run = C.newRun(undefined, shipId || 'barge', {
+  function newGame(shipId, opts) {
+    opts = opts || {};
+    var ctSel = null;
+    if (opts.contract !== undefined) {
+      ctSel = opts.contract;
+    } else if (S.contract) {
+      (S.contractOffers || []).forEach(function (c) { if (c.id === S.contract) ctSel = c; });
+    }
+    S.run = C.newRun(opts.seed, shipId || 'barge', {
       wood: metaLv('wood'),
       hp: metaLv('hp'),
       relic: metaLv('relic') > 0
-    }, S.asc || 0, (function () {
-      if (!S.contract) return null;
-      var found = null;
-      (S.contractOffers || []).forEach(function (c) { if (c.id === S.contract) found = c; });
-      return found;
-    })());
+    }, opts.asc != null ? opts.asc : (S.asc || 0), ctSel);
+    S.dailyRun = opts.daily || null;
     for (var ai = 0; ai < metaLv('aug'); ai++) {
       C.grantAug(S.run, D.AUG_ORDER[Math.floor(Math.random() * D.AUG_ORDER.length)]);
     }
@@ -1870,6 +1965,8 @@
       if (location.search.indexOf('over=1') >= 0) { S.phase = 'gameover'; showGameOver(); }
       if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
       if (location.search.indexOf('dock=1') >= 0) showDock();
+      if (location.search.indexOf('ach=1') >= 0) showAchievements();
+      if (location.search.indexOf('daily=1') >= 0) showDaily();
       if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
       if (location.search.indexOf('beast=1') >= 0) {
         S.battle = C.startBattle(S.run);
