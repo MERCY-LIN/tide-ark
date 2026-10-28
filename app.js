@@ -209,6 +209,68 @@
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6 * k, 3.5 * k); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6 * k, 3.5 * k); ctx.stroke();
         break;
+      case 'rocket':
+        rr(ctx, -4 * k, -9 * k, 8 * k, 14 * k, 4 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 5 * k); ctx.lineTo(-3 * k, 10 * k); ctx.lineTo(0, 8 * k); ctx.lineTo(3 * k, 10 * k); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 3 * k); ctx.lineTo(-8 * k, 6 * k); ctx.lineTo(-4 * k, 7 * k); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4 * k, 3 * k); ctx.lineTo(8 * k, 6 * k); ctx.lineTo(4 * k, 7 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'flare':
+        ctx.beginPath(); ctx.arc(0, 0, 5 * k, 0, 6.283); ctx.fill();
+        for (var fi = 0; fi < 8; fi++) {
+          var fa = fi * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(fa) * 7 * k, Math.sin(fa) * 7 * k);
+          ctx.lineTo(Math.cos(fa) * 10 * k, Math.sin(fa) * 10 * k);
+          ctx.stroke();
+        }
+        break;
+      case 'beacon':
+        ctx.beginPath(); ctx.moveTo(0, 9 * k); ctx.lineTo(0, -3 * k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -6 * k, 3 * k, 0, 6.283); ctx.fill();
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath(); ctx.moveTo(0, -6 * k); ctx.lineTo(9 * k, -10 * k); ctx.lineTo(9 * k, -2 * k); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      case 'mortar':
+        ctx.beginPath(); ctx.moveTo(-7 * k, 8 * k); ctx.lineTo(7 * k, 8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 8 * k); ctx.lineTo(3 * k, -8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(3 * k, -8 * k); ctx.lineTo(-1 * k, -9 * k); ctx.lineTo(-1 * k, -5 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'ram':
+        ctx.beginPath();
+        ctx.moveTo(-9 * k, 0); ctx.lineTo(4 * k, -7 * k); ctx.lineTo(4 * k, 7 * k);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4 * k, -7 * k); ctx.lineTo(9 * k, 0); ctx.lineTo(4 * k, 7 * k); ctx.stroke();
+        break;
+      case 'repairbay':
+        rr(ctx, -9 * k, -6 * k, 18 * k, 12 * k, 2 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 0); ctx.lineTo(4 * k, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -4 * k); ctx.lineTo(0, 4 * k); ctx.stroke();
+        break;
+      case 'shieldgen':
+        ctx.beginPath(); ctx.arc(0, 3 * k, 8 * k, Math.PI, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -8 * k); ctx.lineTo(0, -4 * k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -9 * k, 1.6 * k, 0, 6.283); ctx.fill();
+        break;
+      case 'mine':
+        ctx.beginPath(); ctx.arc(0, 0, 5 * k, 0, 6.283); ctx.fill();
+        for (var mi = 0; mi < 8; mi++) {
+          var ma = mi * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ma) * 5 * k, Math.sin(ma) * 5 * k);
+          ctx.lineTo(Math.cos(ma) * 9 * k, Math.sin(ma) * 9 * k);
+          ctx.stroke();
+        }
+        break;
+      case 'sonar':
+        for (var si = 0; si < 3; si++) {
+          ctx.beginPath();
+          ctx.arc(0, 4 * k, (3 + si * 3) * k, -2.5, -0.65);
+          ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(0, 4 * k, 1.5 * k, 0, 6.283); ctx.fill();
+        break;
       case 'salvage':
         ctx.beginPath(); ctx.moveTo(-9 * k, 9 * k); ctx.lineTo(-9 * k, -8 * k); ctx.lineTo(6 * k, -8 * k); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(6 * k, -8 * k); ctx.lineTo(6 * k, 1 * k); ctx.stroke();

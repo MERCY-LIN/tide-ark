@@ -79,6 +79,52 @@
       dmg: 18, cd: 2.0, range: 4, radius: 90, color: '#6fb7a8', icon: 'depth',
       desc: '对潜 · 范围伤害 · 18 伤害'
     },
+    /* ---- 第二批模块 ---- */
+    rocket: {
+      name: '火箭巢', row: 0, kind: 'weapon', lane: 'air', cost: 24,
+      dmg: 9, cd: 0.55, range: 5, radius: 38, color: '#e2703a', icon: 'rocket',
+      desc: '对空 · 高速连射 · 9 伤害'
+    },
+    flare: {
+      name: '照明弹', row: 0, kind: 'weapon', lane: 'air', cost: 18,
+      dmg: 6, cd: 1.6, range: 6, radius: 80, color: '#ffe08a', icon: 'flare',
+      desc: '对空 · 大范围 · 6 伤害'
+    },
+    beacon: {
+      name: '信号灯', row: 0, kind: 'utility', effect: 'range', cost: 14,
+      color: '#f2e06b', icon: 'beacon',
+      desc: '本层所有武器射程 +1 列'
+    },
+    mortar: {
+      name: '迫击炮', row: 1, kind: 'weapon', lane: 'surface', cost: 26,
+      dmg: 30, cd: 2.6, range: 7, radius: 60, color: '#a5744a', icon: 'mortar',
+      desc: '对海 · 超远射程 · 30 伤害'
+    },
+    ram: {
+      name: '撞角', row: 1, kind: 'weapon', lane: 'surface', cost: 20,
+      dmg: 45, cd: 2.2, range: 1.4, color: '#9aa5b1', icon: 'ram',
+      desc: '对海 · 贴脸 45 伤害 · 射程只有 1 列'
+    },
+    repairbay: {
+      name: '维修台', row: 1, kind: 'utility', effect: 'repair', cost: 22,
+      color: '#86e0b0', icon: 'repairbay',
+      desc: '每波结束修复 12 耐久'
+    },
+    shieldgen: {
+      name: '电磁幕', row: 1, kind: 'utility', effect: 'shield', cost: 24,
+      color: '#7fc8e8', icon: 'shieldgen',
+      desc: '本层受到的啃咬伤害 -20%'
+    },
+    mine: {
+      name: '水雷', row: 2, kind: 'weapon', lane: 'under', cost: 20,
+      dmg: 60, cd: 6, range: 3.2, radius: 70, color: '#5bb3d1', icon: 'mine',
+      desc: '对潜 · 每 6 秒重击 60 伤害'
+    },
+    sonar: {
+      name: '声呐', row: 2, kind: 'utility', effect: 'sonar', cost: 16,
+      color: '#8fd14f', icon: 'sonar',
+      desc: '所有对潜武器射程 +2 列'
+    },
     armor: {
       name: '装甲板', row: 2, kind: 'utility', effect: 'armor', cost: 18,
       color: '#9aa5b1', icon: 'armor',
@@ -91,13 +137,19 @@
     }
   };
 
-  var ORDER = ['ballista', 'flamer', 'tesla', 'gen', 'mag', 'flak', 'salvage', 'harpoon', 'depth', 'armor', 'pump'];
+  /* 按甲板层排序：玩家从上往下扫就是三条泳道 */
+  var ORDER = [
+    'flak', 'rocket', 'flare', 'beacon', 'salvage',
+    'ballista', 'flamer', 'tesla', 'mortar', 'ram', 'gen', 'mag', 'repairbay', 'shieldgen',
+    'harpoon', 'depth', 'mine', 'sonar', 'armor', 'pump'
+  ];
 
   /* ---------- 羁绊：模块带标签，凑够数量触发质变 ---------- */
   var TAG_OF = {
-    ballista: 'gun', flak: 'gun', harpoon: 'gun',
-    flamer: 'fire', depth: 'fire', tesla: 'fire',
-    gen: 'mech', mag: 'mech', armor: 'mech', pump: 'mech', salvage: 'mech'
+    ballista: 'gun', flak: 'gun', harpoon: 'gun', mortar: 'gun', ram: 'gun',
+    flamer: 'fire', depth: 'fire', tesla: 'fire', rocket: 'fire', flare: 'fire', mine: 'fire',
+    gen: 'mech', mag: 'mech', armor: 'mech', pump: 'mech', salvage: 'mech',
+    beacon: 'mech', repairbay: 'mech', shieldgen: 'mech', sonar: 'mech'
   };
 
   var TAGS = {
@@ -323,9 +375,12 @@
     frost: { name: '冷凝', desc: '命中减速 35%，持续 2 秒', slow: 0.65, slowT: 2, color: '#7fc8e8' },
     elevate: { name: '高角', desc: '可打相邻泳道，伤害 -30%', cross: true, dmg: 0.7, color: '#9b8ae0' },
     recharge: { name: '回充', desc: '击杀后立刻重置冷却', recharge: true, color: '#8fd14f' },
-    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' }
+    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' },
+    rail: { name: '轨道', desc: '射程 +3 列，伤害 -20%', rangeAdd: 3, dmg: 0.8, color: '#9dc4d6' },
+    hunter: { name: '追猎', desc: '优先攻击最远的目标', far: true, color: '#8fd14f' },
+    fuse: { name: '引信', desc: '爆炸半径 +60%', radiusMul: 1.6, color: '#e2703a' }
   };
-  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp'];
+  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp', 'rail', 'hunter', 'fuse'];
 
   /* ---------- 潮汐词条：每波一个，逼你换打法 ---------- */
   var MODS = [

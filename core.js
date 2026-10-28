@@ -197,7 +197,10 @@
       aoeMul: 1,
       fireBurst: 0,
       expandMul: 1,
-      rangeMul: 1
+      rangeMul: 1,
+      rowRange: [0, 0, 0],
+      rowShield: [0, 0, 0],
+      underRange: 0
     };
     var cells = cellsOf(run);
 
@@ -277,6 +280,10 @@
       if (e === 'pump') st.pumps++;
       if (e === 'salvage') st.salvage += 8;
       if (e === 'power') st.boost[x.r] = true;
+      if (e === 'repair') st.repairPerWave += 12;
+      if (e === 'range') st.rowRange[x.r] += 1;
+      if (e === 'shield') st.rowShield[x.r] += 0.2;
+      if (e === 'sonar') st.underRange += 2;
     });
     st.maxHp += 40 * (up.hull || 0);
     st.salvage += 10 * (up.salvager || 0);
@@ -527,7 +534,10 @@
 
   function acquire(b, m) {
     var lane = m.def.lane;
-    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
+    var augR = m.aug && m.aug.rangeAdd ? m.aug.rangeAdd : 0;
+    var rowR = (b.st.rowRange && b.st.rowRange[m.row]) || 0;
+    var underR = lane === 'under' ? (b.st.underRange || 0) : 0;
+    var reach = (m.def.range + b.st.rangeBonus + rowR + underR + augR) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
     var best = null, bestScore = Infinity;
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
@@ -535,6 +545,7 @@
       if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
+      if (m.aug && m.aug.far) score = -Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
     }
     return best;
@@ -552,7 +563,7 @@
         e = b.enemies[i];
         if (e.dead) continue;
         var dx = e.x - target.x, dy = e.y - target.y;
-        var rr2 = m.def.radius * (b.st.aoeMul || 1);
+        var rr2 = m.def.radius * (b.st.aoeMul || 1) * (aug && aug.radiusMul ? aug.radiusMul : 1);
         if (dx * dx + dy * dy <= rr2 * rr2) hits.push(e);
       }
       b.blasts.push({ x: target.x, y: target.y, r: m.def.radius * (b.st.aoeMul || 1), life: 0.3, max: 0.3, color: m.def.color });
@@ -719,7 +730,9 @@
           e.biteCd = 0.55;
           e.hit = 0.12;
         }
-        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt;
+        var laneRow = e.lane === 'air' ? 0 : (e.lane === 'under' ? 2 : 1);
+        var shield = (b.st.rowShield && b.st.rowShield[laneRow]) || 0;
+        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt * (1 - Math.min(0.6, shield));
         b.hp -= bite;
         b.leak += bite;
         b.leakByLane[e.lane] += bite;

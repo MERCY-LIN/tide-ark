@@ -489,6 +489,52 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       dmg: 18, cd: 2.0, range: 4, radius: 90, color: '#6fb7a8', icon: 'depth',
       desc: '对潜 · 范围伤害 · 18 伤害'
     },
+    /* ---- 第二批模块 ---- */
+    rocket: {
+      name: '火箭巢', row: 0, kind: 'weapon', lane: 'air', cost: 24,
+      dmg: 9, cd: 0.55, range: 5, radius: 38, color: '#e2703a', icon: 'rocket',
+      desc: '对空 · 高速连射 · 9 伤害'
+    },
+    flare: {
+      name: '照明弹', row: 0, kind: 'weapon', lane: 'air', cost: 18,
+      dmg: 6, cd: 1.6, range: 6, radius: 80, color: '#ffe08a', icon: 'flare',
+      desc: '对空 · 大范围 · 6 伤害'
+    },
+    beacon: {
+      name: '信号灯', row: 0, kind: 'utility', effect: 'range', cost: 14,
+      color: '#f2e06b', icon: 'beacon',
+      desc: '本层所有武器射程 +1 列'
+    },
+    mortar: {
+      name: '迫击炮', row: 1, kind: 'weapon', lane: 'surface', cost: 26,
+      dmg: 30, cd: 2.6, range: 7, radius: 60, color: '#a5744a', icon: 'mortar',
+      desc: '对海 · 超远射程 · 30 伤害'
+    },
+    ram: {
+      name: '撞角', row: 1, kind: 'weapon', lane: 'surface', cost: 20,
+      dmg: 45, cd: 2.2, range: 1.4, color: '#9aa5b1', icon: 'ram',
+      desc: '对海 · 贴脸 45 伤害 · 射程只有 1 列'
+    },
+    repairbay: {
+      name: '维修台', row: 1, kind: 'utility', effect: 'repair', cost: 22,
+      color: '#86e0b0', icon: 'repairbay',
+      desc: '每波结束修复 12 耐久'
+    },
+    shieldgen: {
+      name: '电磁幕', row: 1, kind: 'utility', effect: 'shield', cost: 24,
+      color: '#7fc8e8', icon: 'shieldgen',
+      desc: '本层受到的啃咬伤害 -20%'
+    },
+    mine: {
+      name: '水雷', row: 2, kind: 'weapon', lane: 'under', cost: 20,
+      dmg: 60, cd: 6, range: 3.2, radius: 70, color: '#5bb3d1', icon: 'mine',
+      desc: '对潜 · 每 6 秒重击 60 伤害'
+    },
+    sonar: {
+      name: '声呐', row: 2, kind: 'utility', effect: 'sonar', cost: 16,
+      color: '#8fd14f', icon: 'sonar',
+      desc: '所有对潜武器射程 +2 列'
+    },
     armor: {
       name: '装甲板', row: 2, kind: 'utility', effect: 'armor', cost: 18,
       color: '#9aa5b1', icon: 'armor',
@@ -501,13 +547,19 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     }
   };
 
-  var ORDER = ['ballista', 'flamer', 'tesla', 'gen', 'mag', 'flak', 'salvage', 'harpoon', 'depth', 'armor', 'pump'];
+  /* 按甲板层排序：玩家从上往下扫就是三条泳道 */
+  var ORDER = [
+    'flak', 'rocket', 'flare', 'beacon', 'salvage',
+    'ballista', 'flamer', 'tesla', 'mortar', 'ram', 'gen', 'mag', 'repairbay', 'shieldgen',
+    'harpoon', 'depth', 'mine', 'sonar', 'armor', 'pump'
+  ];
 
   /* ---------- 羁绊：模块带标签，凑够数量触发质变 ---------- */
   var TAG_OF = {
-    ballista: 'gun', flak: 'gun', harpoon: 'gun',
-    flamer: 'fire', depth: 'fire', tesla: 'fire',
-    gen: 'mech', mag: 'mech', armor: 'mech', pump: 'mech', salvage: 'mech'
+    ballista: 'gun', flak: 'gun', harpoon: 'gun', mortar: 'gun', ram: 'gun',
+    flamer: 'fire', depth: 'fire', tesla: 'fire', rocket: 'fire', flare: 'fire', mine: 'fire',
+    gen: 'mech', mag: 'mech', armor: 'mech', pump: 'mech', salvage: 'mech',
+    beacon: 'mech', repairbay: 'mech', shieldgen: 'mech', sonar: 'mech'
   };
 
   var TAGS = {
@@ -733,9 +785,12 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     frost: { name: '冷凝', desc: '命中减速 35%，持续 2 秒', slow: 0.65, slowT: 2, color: '#7fc8e8' },
     elevate: { name: '高角', desc: '可打相邻泳道，伤害 -30%', cross: true, dmg: 0.7, color: '#9b8ae0' },
     recharge: { name: '回充', desc: '击杀后立刻重置冷却', recharge: true, color: '#8fd14f' },
-    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' }
+    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' },
+    rail: { name: '轨道', desc: '射程 +3 列，伤害 -20%', rangeAdd: 3, dmg: 0.8, color: '#9dc4d6' },
+    hunter: { name: '追猎', desc: '优先攻击最远的目标', far: true, color: '#8fd14f' },
+    fuse: { name: '引信', desc: '爆炸半径 +60%', radiusMul: 1.6, color: '#e2703a' }
   };
-  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp'];
+  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp', 'rail', 'hunter', 'fuse'];
 
   /* ---------- 潮汐词条：每波一个，逼你换打法 ---------- */
   var MODS = [
@@ -1192,7 +1247,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       aoeMul: 1,
       fireBurst: 0,
       expandMul: 1,
-      rangeMul: 1
+      rangeMul: 1,
+      rowRange: [0, 0, 0],
+      rowShield: [0, 0, 0],
+      underRange: 0
     };
     var cells = cellsOf(run);
 
@@ -1272,6 +1330,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (e === 'pump') st.pumps++;
       if (e === 'salvage') st.salvage += 8;
       if (e === 'power') st.boost[x.r] = true;
+      if (e === 'repair') st.repairPerWave += 12;
+      if (e === 'range') st.rowRange[x.r] += 1;
+      if (e === 'shield') st.rowShield[x.r] += 0.2;
+      if (e === 'sonar') st.underRange += 2;
     });
     st.maxHp += 40 * (up.hull || 0);
     st.salvage += 10 * (up.salvager || 0);
@@ -1522,7 +1584,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function acquire(b, m) {
     var lane = m.def.lane;
-    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
+    var augR = m.aug && m.aug.rangeAdd ? m.aug.rangeAdd : 0;
+    var rowR = (b.st.rowRange && b.st.rowRange[m.row]) || 0;
+    var underR = lane === 'under' ? (b.st.underRange || 0) : 0;
+    var reach = (m.def.range + b.st.rangeBonus + rowR + underR + augR) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
     var best = null, bestScore = Infinity;
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
@@ -1530,6 +1595,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
+      if (m.aug && m.aug.far) score = -Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
     }
     return best;
@@ -1547,7 +1613,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         e = b.enemies[i];
         if (e.dead) continue;
         var dx = e.x - target.x, dy = e.y - target.y;
-        var rr2 = m.def.radius * (b.st.aoeMul || 1);
+        var rr2 = m.def.radius * (b.st.aoeMul || 1) * (aug && aug.radiusMul ? aug.radiusMul : 1);
         if (dx * dx + dy * dy <= rr2 * rr2) hits.push(e);
       }
       b.blasts.push({ x: target.x, y: target.y, r: m.def.radius * (b.st.aoeMul || 1), life: 0.3, max: 0.3, color: m.def.color });
@@ -1714,7 +1780,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
           e.biteCd = 0.55;
           e.hit = 0.12;
         }
-        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt;
+        var laneRow = e.lane === 'air' ? 0 : (e.lane === 'under' ? 2 : 1);
+        var shield = (b.st.rowShield && b.st.rowShield[laneRow]) || 0;
+        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt * (1 - Math.min(0.6, shield));
         b.hp -= bite;
         b.leak += bite;
         b.leakByLane[e.lane] += bite;
@@ -2146,6 +2214,68 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -7 * k); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6 * k, 3.5 * k); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6 * k, 3.5 * k); ctx.stroke();
+        break;
+      case 'rocket':
+        rr(ctx, -4 * k, -9 * k, 8 * k, 14 * k, 4 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 5 * k); ctx.lineTo(-3 * k, 10 * k); ctx.lineTo(0, 8 * k); ctx.lineTo(3 * k, 10 * k); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 3 * k); ctx.lineTo(-8 * k, 6 * k); ctx.lineTo(-4 * k, 7 * k); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4 * k, 3 * k); ctx.lineTo(8 * k, 6 * k); ctx.lineTo(4 * k, 7 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'flare':
+        ctx.beginPath(); ctx.arc(0, 0, 5 * k, 0, 6.283); ctx.fill();
+        for (var fi = 0; fi < 8; fi++) {
+          var fa = fi * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(fa) * 7 * k, Math.sin(fa) * 7 * k);
+          ctx.lineTo(Math.cos(fa) * 10 * k, Math.sin(fa) * 10 * k);
+          ctx.stroke();
+        }
+        break;
+      case 'beacon':
+        ctx.beginPath(); ctx.moveTo(0, 9 * k); ctx.lineTo(0, -3 * k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -6 * k, 3 * k, 0, 6.283); ctx.fill();
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath(); ctx.moveTo(0, -6 * k); ctx.lineTo(9 * k, -10 * k); ctx.lineTo(9 * k, -2 * k); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      case 'mortar':
+        ctx.beginPath(); ctx.moveTo(-7 * k, 8 * k); ctx.lineTo(7 * k, 8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 8 * k); ctx.lineTo(3 * k, -8 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(3 * k, -8 * k); ctx.lineTo(-1 * k, -9 * k); ctx.lineTo(-1 * k, -5 * k); ctx.closePath(); ctx.fill();
+        break;
+      case 'ram':
+        ctx.beginPath();
+        ctx.moveTo(-9 * k, 0); ctx.lineTo(4 * k, -7 * k); ctx.lineTo(4 * k, 7 * k);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4 * k, -7 * k); ctx.lineTo(9 * k, 0); ctx.lineTo(4 * k, 7 * k); ctx.stroke();
+        break;
+      case 'repairbay':
+        rr(ctx, -9 * k, -6 * k, 18 * k, 12 * k, 2 * k); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-4 * k, 0); ctx.lineTo(4 * k, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -4 * k); ctx.lineTo(0, 4 * k); ctx.stroke();
+        break;
+      case 'shieldgen':
+        ctx.beginPath(); ctx.arc(0, 3 * k, 8 * k, Math.PI, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -8 * k); ctx.lineTo(0, -4 * k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -9 * k, 1.6 * k, 0, 6.283); ctx.fill();
+        break;
+      case 'mine':
+        ctx.beginPath(); ctx.arc(0, 0, 5 * k, 0, 6.283); ctx.fill();
+        for (var mi = 0; mi < 8; mi++) {
+          var ma = mi * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ma) * 5 * k, Math.sin(ma) * 5 * k);
+          ctx.lineTo(Math.cos(ma) * 9 * k, Math.sin(ma) * 9 * k);
+          ctx.stroke();
+        }
+        break;
+      case 'sonar':
+        for (var si = 0; si < 3; si++) {
+          ctx.beginPath();
+          ctx.arc(0, 4 * k, (3 + si * 3) * k, -2.5, -0.65);
+          ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(0, 4 * k, 1.5 * k, 0, 6.283); ctx.fill();
         break;
       case 'salvage':
         ctx.beginPath(); ctx.moveTo(-9 * k, 9 * k); ctx.lineTo(-9 * k, -8 * k); ctx.lineTo(6 * k, -8 * k); ctx.stroke();

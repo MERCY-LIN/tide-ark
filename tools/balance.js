@@ -1,4 +1,4 @@
-﻿/* headless 数值回归：用贪心 AI 跑多局，检验曲线是否合理
+/* headless 数值回归：用贪心 AI 跑多局，检验曲线是否合理
    用法：
      node tools/balance.js 400
      node tools/balance.js 1 --trace
@@ -80,12 +80,27 @@ function buildPhase(run) {
     const cells = C.cellsOf(run);
     const unlocked = run.unlocked;
 
-    /* 1. 按"敌人数 / 已有武器数"补炮 */
-    const lanes = Object.keys(lanesNeeded).sort((a, b) => {
+    /* 1. 先用库存里的武器（免费，不占木材） */
+    const lanesSorted = Object.keys(lanesNeeded).sort((a, b) => {
       const ra = lanesNeeded[a] / (laneWeapons(run, a).length + 1);
       const rb = lanesNeeded[b] / (laneWeapons(run, b).length + 1);
       return rb - ra;
     });
+    let actedStock = false;
+    for (const lane of lanesSorted) {
+      const ids = D.ORDER.filter(function (id) {
+        return run.stock[id] > 0 && D.MODULES[id].kind === 'weapon' &&
+          (D.MODULES[id].lane === lane || D.MODULES[id].lane === 'any');
+      });
+      for (const id of ids) {
+        if (tryBuy(run, id, order)) { actedStock = true; break; }
+      }
+      if (actedStock) break;
+    }
+    if (actedStock) continue;
+
+    /* 2. 按"敌人数 / 已有武器数"补炮 */
+    const lanes = lanesSorted;
     let acted = false;
     for (const lane of lanes) {
       for (const id of [lanePick[lane], laneBase[lane]]) {
