@@ -415,6 +415,7 @@ index.html?nointro=1                 跳过开场
         &battle=1&sim=12              开战并快进
         &wave=5                       指定波次
         &reward=1                     路线弹窗
+        &ach=1 / &daily=1 / &evclick=1  成就 / 今日挑战 / 事件并自动点第一个选项
 ```
 
 ---

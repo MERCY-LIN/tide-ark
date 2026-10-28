@@ -1591,6 +1591,7 @@
   }
 
   function showEvent(ev) {
+    S.event = ev;
     var html = '<h2>' + ev.name + '</h2>' +
       '<div class="sub">遭遇 · 第 ' + (S.route ? S.route.cleared + 1 : S.run.wave) + ' 次潮汐前</div>' +
       '<p>' + ev.text + '</p>' +
@@ -1605,13 +1606,13 @@
       '<p class="hintline">事件不消耗路线，选完直接进入下一次潮汐的建造。</p>';
     openModal(html);
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
-      el.addEventListener('click', function () { pickEventChoice(parseInt(el.dataset.i, 10)); });
+      el.addEventListener('click', function () { pickEventChoice(parseInt(el.dataset.i, 10), ev); });
     });
   }
 
-  function pickEventChoice(i) {
-    if (!S.event) return;
-    var ev = S.event;
+  function pickEventChoice(i, evArg) {
+    var ev = evArg || S.event;
+    if (!ev) return;
     var choice = ev.choices[i];
     if (!choice) return;
     S.event = null;
@@ -2054,6 +2055,14 @@
       if (location.search.indexOf('dock=1') >= 0) showDock();
       if (location.search.indexOf('ach=1') >= 0) showAchievements();
       if (location.search.indexOf('daily=1') >= 0) showDaily();
+      if (location.search.indexOf('evclick=1') >= 0) {
+        S.route = { cleared: 3 };
+        showEvent(D.EVENTS[5]);
+        setTimeout(function () {
+          var el = document.querySelector('.pick');
+          if (el) el.click();
+        }, 400);
+      }
       if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
       if (location.search.indexOf('beast=1') >= 0) {
         S.battle = C.startBattle(S.run);
