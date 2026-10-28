@@ -380,6 +380,8 @@
 
     g.save();
     g.translate(x, y);
+    /* 从右舷来的敌人在向左走，要翻转朝向 */
+    if (e.side === 'R') g.scale(-1, 1);
 
     /* 光晕 */
     var rad = g.createRadialGradient(0, 0, 2, 0, 0, e.r * 2.6);
@@ -776,8 +778,8 @@
 
     /* 建造阶段的来袭方向 */
     if (!b) {
-      var preview = S.run.plan ? D.previewOf(S.run.plan) : { sides: [] };
-      drawSideArrows(preview, t);
+      /* previewOf().sides 是给人看的字符串，箭头要用数组 */
+      drawSideArrows({ sides: S.run.plan ? S.run.plan.sides : [] }, t);
     }
 
     /* 战斗中顶部血迹 */
@@ -1066,7 +1068,6 @@
       cleared: cleared,
       kills: b.killed
     };
-    S.run.wave = cleared + 1;
     S.phase = 'route';
     showRoute();
   }
@@ -1165,8 +1166,10 @@
     if (!S.route) return;
     var opt = S.route.options[i];
     if (!opt) return;
+    var nextWave = (S.route.cleared || 0) + 1;
     S.route = null;
     closeModal();
+    S.run.wave = nextWave;
     C.applyRoute(S.run, opt);
     C.planWave(S.run);
     toast('迎战「' + opt.name + '」 · ' + rewardText(opt.reward));
@@ -1180,6 +1183,18 @@
     syncUI();
   }
 
+  function runSummary() {
+    var parts = [];
+    var ship = D.SHIPS[S.run.ship];
+    if (ship) parts.push(ship.name);
+    if (S.run.relics && S.run.relics.length) parts.push('遗物 ' + S.run.relics.length + ' 件');
+    var ups = Object.keys(S.run.up || {}).filter(function (k) { return S.run.up[k] > 0; });
+    if (ups.length) parts.push('改造 ' + ups.length + ' 项');
+    var n = C.cellsOf(S.run).length;
+    if (n) parts.push('模块 ' + n + ' 台');
+    return parts.join(' · ');
+  }
+
   function showGameOver() {
     var b = S.battle;
     var totalLeak = b.leak || 1;
@@ -1188,16 +1203,16 @@
     Object.keys(b.leakByLane).forEach(function (k) {
       if (b.leakByLane[k] > worstVal) { worstVal = b.leakByLane[k]; worst = k; }
     });
+    var hasLeak = worstVal > 1;
     var share = Math.round((worstVal / totalLeak) * 100);
 
     var html = '<h2 style="color:#ff9c86">木筏沉没</h2>' +
-      '<div class="sub">第 ' + S.run.wave + ' 次潮汐 · 共击杀 ' + (S.run.kills + b.killed) + '</div>' +
+      '<div class="sub">第 ' + S.run.wave + ' / ' + D.MAX_WAVE + ' 次潮汐 · ' + runSummary() + '</div>' +
       '<div class="infogrid">' +
-      '<div class="k">止步于</div><div class="v">第 ' + S.run.wave + ' / ' + D.MAX_WAVE + ' 次潮汐</div>' +
       '<div class="k">本波击杀</div><div class="v">' + b.killed + '</div>' +
       '<div class="k">总输出</div><div class="v">' + Math.round(b.dmgDealt) + '</div>' +
-      (worst ? '<div class="k">主要失血</div><div class="v bad">' + laneName[worst] + ' · ' + share + '%</div>' : '') +
-      (worst ? '<div class="k">诊断</div><div class="v">' +
+      (hasLeak ? '<div class="k">主要失血</div><div class="v bad">' + laneName[worst] + ' · ' + share + '%</div>' : '') +
+      (hasLeak ? '<div class="k">诊断</div><div class="v">' +
         (worst === 'surface' ? '对海火力不足或射程没有覆盖到来袭方向'
           : worst === 'air' ? '高空甲板缺少高射炮，潮蝠直接撞上来了'
             : '水下舱缺少鱼叉/深水炸弹，深潜者一路啃到船底') + '</div>' : '') +
@@ -1209,7 +1224,7 @@
 
   function showVictory() {
     var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
-      '<div class="sub">你带着这条船活过了 8 次潮汐</div>' +
+      '<div class="sub">你带着这条船活过了 8 次潮汐 · ' + runSummary() + '</div>' +
       '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
       '甲板上还留着这一路捞上来、拼起来的东西——那是你亲手造的船。</p>' +
       '<div class="infogrid">' +
@@ -1227,7 +1242,7 @@
       '<p>你有一条破木筏。每次<span class="hl">退潮</span>时打捞、建造；每次<span class="hl">涨潮</span>时海怪扑上来，' +
       '你的模块自动开火。撑过 <span class="hl">8 次潮汐</span>。</p>' +
       '<div class="infogrid">' +
-      '<div class="k">甲板是钱</div><div class="v">一开始只有<b>中间两列</b>。点两侧的暗格花木材<b>加固</b>，每列多 3 个格子</div>' +
+      '<div class="k">甲板是钱</div><div class="v">一开始只有<b>中间几列</b>。点两侧的暗格花木材<b>加固</b>，每列多 3 个格子</div>' +
       '<div class="k">三层甲板</div><div class="v">高空甲板只打<b>空中</b>，主甲板只打<b>海面</b>，水下舱只打<b>水下</b></div>' +
       '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。没加固外侧列，就够不着远处的敌人</div>' +
       '<div class="k">射程</div><div class="v">射程按<b>列</b>算。靠边的炮更能覆盖自己这一侧</div>' +
@@ -1329,9 +1344,24 @@
       if (S.endTimer <= 0) resolveBattle();
     }
 
-    draw(S.t);
-
-    syncUIThrottled(dt);
+    try {
+      draw(S.t);
+      syncUIThrottled(dt);
+    } catch (err) {
+      if (!S.lastError) {
+        S.lastError = (err && err.message) ? err.message : String(err);
+        console.error('[tide-ark] 渲染异常', err);
+      }
+      /* 出错时把原因画在画面上，方便截图定位，同时不打断主循环 */
+      try {
+        g.fillStyle = 'rgba(0,0,0,.72)';
+        g.fillRect(0, 0, W, 22);
+        g.fillStyle = '#ff8b6b';
+        g.font = '12px monospace';
+        g.textAlign = 'left';
+        g.fillText('ERR: ' + S.lastError, 8, 15);
+      } catch (e2) { /* 忽略 */ }
+    }
     requestAnimationFrame(frame);
   }
 
@@ -1340,20 +1370,8 @@
     uiAcc += dt;
     if (uiAcc > 0.1) {
       uiAcc = 0;
-      updatePreview();
-      if (S.battle) {
-        /* 战斗中只更新血量/潮位，不重建手牌 */
-        var b = S.battle;
-        if (b) {
-          $('sHp').textContent = Math.round(b.hp) + ' / ' + b.maxHp;
-          var pct = clamp(b.hp / b.maxHp, 0, 1) * 100;
-          $('hpBar').firstElementChild.style.width = pct + '%';
-          $('hpBar').classList.toggle('low', pct < 40);
-          $('tideFill').style.width = Math.round(b.tide * 100) + '%';
-        }
-      } else {
-        $('tideFill').style.width = '0%';
-      }
+      /* 整块刷新，任何状态变化都不会滞留在界面上 */
+      syncUI();
     }
   }
 
@@ -1384,6 +1402,8 @@
       }
       syncUI();
       if (location.search.indexOf('select') >= 0) showShipSelect();
+      if (location.search.indexOf('over=1') >= 0) { S.phase = 'gameover'; showGameOver(); }
+      if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
       var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
       if (mShip) newGame(mShip[1]);
     }
