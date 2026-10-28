@@ -351,6 +351,28 @@
       ]
     },
 
+    /* ---- 有机制的敌人 ---- */
+    ironclad: {
+      name: '铁壳蟹', lane: 'surface', hp: 130, spd: 34, dmg: 10, r: 24,
+      color: '#8a8f98', pts: 3.2, armor: 4,
+      hint: '护甲 5，小口径打不动'
+    },
+    spore: {
+      name: '孢囊', lane: 'air', hp: 44, spd: 72, dmg: 5, r: 15,
+      color: '#9fd36a', pts: 1.6, split: 'shard'
+    },
+    shard: { name: '孢囊碎片', lane: 'air', hp: 14, spd: 112, dmg: 3, r: 9, color: '#c8e8a0', pts: 0.25 },
+    ray: {
+      name: '狙击鳐', lane: 'air', hp: 85, spd: 58, dmg: 13, r: 17,
+      color: '#6fb7d6', pts: 2.6, standoff: 160,
+      hint: '停在远处射击，短射程武器够不到'
+    },
+    matron: {
+      name: '潮母', lane: 'under', hp: 190, spd: 40, dmg: 9, r: 22,
+      color: '#7fd6b0', pts: 3.6, heal: 12,
+      hint: '持续治疗周围敌人'
+    },
+
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
@@ -389,7 +411,11 @@
     { id: 'iron', name: '铁潮', desc: '敌方生命 +30%', hp: 1.3 },
     { id: 'swarm', name: '蜂群', desc: '敌方数量 +3，生命 -25%', hp: 0.75, add: 3 },
     { id: 'blood', name: '血月', desc: '敌方啃咬伤害 +50%', dmg: 1.5 },
-    { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] }
+    { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] },
+    { id: 'static', name: '磁暴', desc: '所有武器射速 -12%', rate: 1.12 },
+    { id: 'raid', name: '空袭', desc: '额外 2 只潮蝠', extra: ['bat', 'bat'] },
+    { id: 'ironveil', name: '铁幕', desc: '所有敌人护甲 +3', armor: 3 },
+    { id: 'springtide', name: '春潮', desc: '潮水上涨快 40%', tideFast: 1.4 }
   ];
 
   var ACT1_END = 8;
@@ -441,11 +467,13 @@
 
   function poolFor(wave) {
     var p = ['drifter'];
-    if (wave >= 9) p.push('eel', 'shade');
-    if (wave >= 10) p.push('crab');
+    if (wave >= 9) p.push('eel', 'shade', 'ray');
+    if (wave >= 10) p.push('crab', 'matron');
     if (wave >= 3) p.push('bat');
+    if (wave >= 4) p.push('spore');
     if (wave >= 5) p.push('diver');
     if (wave >= 6) p.push('shellback');
+    if (wave >= 7) p.push('ironclad');
     if (wave >= 7) p.push('raider');
     return p;
   }
@@ -508,6 +536,7 @@
     list.sort(function (a, b) { return (b.kind === 'boss' ? 1 : 0) - (a.kind === 'boss' ? 1 : 0); });
 
     var dur = isBoss ? 38 : Math.min(34, 20 + list.length * 1.15);
+    if (mod && mod.tideFast) dur = Math.round(dur / mod.tideFast);
     var n = list.length;
     var t0 = 1.4, t1 = dur * 0.46;
     list.forEach(function (e, i) {
@@ -526,7 +555,9 @@
       hpMul: (isBoss ? (wave >= MAX_WAVE ? 1.6 : 1.45) : 1 + (Math.min(wave, ACT1_END) - 1) * 0.10) * (mod && mod.hp ? mod.hp : 1),
       spdMul: mod && mod.spd ? mod.spd : 1,
       dmgMul: mod && mod.dmg ? mod.dmg : 1,
-      rangeMul: mod && mod.range ? mod.range : 1
+      rangeMul: mod && mod.range ? mod.range : 1,
+      rateMul: mod && mod.rate ? mod.rate : 1,
+      armorBonus: mod && mod.armor ? mod.armor : 0
     };
   }
 

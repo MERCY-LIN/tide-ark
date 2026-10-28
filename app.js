@@ -542,7 +542,7 @@
     var alpha = e.hit > 0 ? 0.55 : 1;
     g.globalAlpha = alpha;
 
-    if (e.kind === 'bat') {
+    if (e.kind === 'bat' || e.kind === 'ray') {
       var flap = Math.sin(t * 12 + e.bob) * 0.7;
       g.fillStyle = col;
       g.beginPath();
@@ -661,7 +661,7 @@
       g.lineTo(0, -e.r * 1.6);
       g.lineTo(e.r * 0.5, -e.r * 0.8);
       g.closePath(); g.fill();
-      if (e.kind === 'shellback') {
+      if (e.kind === 'shellback' || e.kind === 'ironclad') {
         g.strokeStyle = 'rgba(0,0,0,.35)';
         g.lineWidth = 2;
         for (var j = -1; j <= 1; j++) {

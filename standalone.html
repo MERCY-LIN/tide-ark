@@ -761,6 +761,28 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       ]
     },
 
+    /* ---- 有机制的敌人 ---- */
+    ironclad: {
+      name: '铁壳蟹', lane: 'surface', hp: 130, spd: 34, dmg: 10, r: 24,
+      color: '#8a8f98', pts: 3.2, armor: 4,
+      hint: '护甲 5，小口径打不动'
+    },
+    spore: {
+      name: '孢囊', lane: 'air', hp: 44, spd: 72, dmg: 5, r: 15,
+      color: '#9fd36a', pts: 1.6, split: 'shard'
+    },
+    shard: { name: '孢囊碎片', lane: 'air', hp: 14, spd: 112, dmg: 3, r: 9, color: '#c8e8a0', pts: 0.25 },
+    ray: {
+      name: '狙击鳐', lane: 'air', hp: 85, spd: 58, dmg: 13, r: 17,
+      color: '#6fb7d6', pts: 2.6, standoff: 160,
+      hint: '停在远处射击，短射程武器够不到'
+    },
+    matron: {
+      name: '潮母', lane: 'under', hp: 190, spd: 40, dmg: 9, r: 22,
+      color: '#7fd6b0', pts: 3.6, heal: 12,
+      hint: '持续治疗周围敌人'
+    },
+
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
@@ -799,7 +821,11 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     { id: 'iron', name: '铁潮', desc: '敌方生命 +30%', hp: 1.3 },
     { id: 'swarm', name: '蜂群', desc: '敌方数量 +3，生命 -25%', hp: 0.75, add: 3 },
     { id: 'blood', name: '血月', desc: '敌方啃咬伤害 +50%', dmg: 1.5 },
-    { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] }
+    { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] },
+    { id: 'static', name: '磁暴', desc: '所有武器射速 -12%', rate: 1.12 },
+    { id: 'raid', name: '空袭', desc: '额外 2 只潮蝠', extra: ['bat', 'bat'] },
+    { id: 'ironveil', name: '铁幕', desc: '所有敌人护甲 +3', armor: 3 },
+    { id: 'springtide', name: '春潮', desc: '潮水上涨快 40%', tideFast: 1.4 }
   ];
 
   var ACT1_END = 8;
@@ -851,11 +877,13 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function poolFor(wave) {
     var p = ['drifter'];
-    if (wave >= 9) p.push('eel', 'shade');
-    if (wave >= 10) p.push('crab');
+    if (wave >= 9) p.push('eel', 'shade', 'ray');
+    if (wave >= 10) p.push('crab', 'matron');
     if (wave >= 3) p.push('bat');
+    if (wave >= 4) p.push('spore');
     if (wave >= 5) p.push('diver');
     if (wave >= 6) p.push('shellback');
+    if (wave >= 7) p.push('ironclad');
     if (wave >= 7) p.push('raider');
     return p;
   }
@@ -918,6 +946,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     list.sort(function (a, b) { return (b.kind === 'boss' ? 1 : 0) - (a.kind === 'boss' ? 1 : 0); });
 
     var dur = isBoss ? 38 : Math.min(34, 20 + list.length * 1.15);
+    if (mod && mod.tideFast) dur = Math.round(dur / mod.tideFast);
     var n = list.length;
     var t0 = 1.4, t1 = dur * 0.46;
     list.forEach(function (e, i) {
@@ -936,7 +965,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       hpMul: (isBoss ? (wave >= MAX_WAVE ? 1.6 : 1.45) : 1 + (Math.min(wave, ACT1_END) - 1) * 0.10) * (mod && mod.hp ? mod.hp : 1),
       spdMul: mod && mod.spd ? mod.spd : 1,
       dmgMul: mod && mod.dmg ? mod.dmg : 1,
-      rangeMul: mod && mod.range ? mod.range : 1
+      rangeMul: mod && mod.range ? mod.range : 1,
+      rateMul: mod && mod.rate ? mod.rate : 1,
+      armorBonus: mod && mod.armor ? mod.armor : 0
     };
   }
 
@@ -1558,6 +1589,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function hurt(b, e, amount, color, noBurst) {
     if (e.dead) return;
+    var arm = (e.def.armor || 0) + (b.plan.armorBonus || 0);
+    if (arm > 0) amount = Math.max(1, amount - arm);
     e.hp -= amount;
     e.hit = 0.14;
     b.dmgDealt += amount;
@@ -1567,6 +1600,26 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       burst(b, e.x, e.y, e.def.color, e.def.boss ? 26 : 8, e.def.boss ? 160 : 110);
       if (e.def.boss) pushLog(b, '潮汐巨兽倒下了');
       else floatText(b, e.x, e.y - 14, '✦', color || '#ffd479', 15);
+
+      /* 分裂：死亡时裂成两个小的 */
+      if (e.def.split && !e._split) {
+        e._split = true;
+        var sdef = D.ENEMIES[e.def.split];
+        if (sdef) {
+          for (var si2 = 0; si2 < 2; si2++) {
+            var shp = sdef.hp * (b.plan.hpMul || 1);
+            b.enemies.push({
+              id: b.seq++, kind: e.def.split, def: sdef, lane: sdef.lane, side: e.side,
+              x: e.x + (si2 ? 16 : -16), y: e.y,
+              hp: shp, maxHp: shp, r: sdef.r,
+              latched: false, enraged: e.enraged, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+              phase: 0, spdMul: 1, dmgMul: 1,
+              bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+            });
+          }
+          floatText(b, e.x, e.y - 18, '分裂', '#9fd36a', 13);
+        }
+      }
 
       /* 燃烧羁绊：击杀时炸开 */
       if (b.st.fireBurst && !noBurst && !e._burst) {
@@ -1761,15 +1814,32 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         if (e.dead) continue;
       }
       if (e.slowT > 0) e.slowT -= dt;
+      if (e.def.heal) {
+        e.healCd = (e.healCd || 2) - dt;
+        if (e.healCd <= 0) {
+          e.healCd = 2;
+          for (var hi = 0; hi < b.enemies.length; hi++) {
+            var tgt = b.enemies[hi];
+            if (tgt === e || tgt.dead || tgt.hp >= tgt.maxHp) continue;
+            var hdx = tgt.x - e.x, hdy = tgt.y - e.y;
+            if (hdx * hdx + hdy * hdy > 150 * 150) continue;
+            tgt.hp = Math.min(tgt.maxHp, tgt.hp + e.def.heal);
+            b.particles.push({ x: tgt.x, y: tgt.y, vx: 0, vy: -30, life: 0.5, max: 0.5, color: '#7fd6b0', r: 2.5 });
+          }
+        }
+      }
 
       if (!e.latched) {
         var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
+        var stand = e.def.standoff || 0;
         if (e.side === 'L') {
           e.x += spd * dt;
-          if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
+          var lx = edgeX('L') - stand;
+          if (e.x >= lx) { e.x = lx; e.latched = true; }
         } else {
           e.x -= spd * dt;
-          if (e.x <= edgeX('R')) { e.x = edgeX('R'); e.latched = true; }
+          var rx = edgeX('R') + stand;
+          if (e.x <= rx) { e.x = rx; e.latched = true; }
         }
         if (e.latched && (e.def.boss || e.kind === 'raider')) {
           pushLog(b, e.def.name + '撞上' + (e.side === 'L' ? '左舷' : '右舷'));
@@ -1797,7 +1867,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (m.cd > 0) { m.cd -= dt; continue; }
       var target = acquire(b, m);
       if (!target) continue;
-      var rate = b.st.rateMul;
+      var rate = b.st.rateMul * (b.plan.rateMul || 1);
       if (m.boosted) rate *= 1 / (b.st.boostMul || 1.2);
       if (m.flooded) rate *= 1.25;
       if (m.ampBonus) rate *= 1 / (1 + m.ampBonus);
@@ -2548,7 +2618,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     var alpha = e.hit > 0 ? 0.55 : 1;
     g.globalAlpha = alpha;
 
-    if (e.kind === 'bat') {
+    if (e.kind === 'bat' || e.kind === 'ray') {
       var flap = Math.sin(t * 12 + e.bob) * 0.7;
       g.fillStyle = col;
       g.beginPath();
@@ -2667,7 +2737,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       g.lineTo(0, -e.r * 1.6);
       g.lineTo(e.r * 0.5, -e.r * 0.8);
       g.closePath(); g.fill();
-      if (e.kind === 'shellback') {
+      if (e.kind === 'shellback' || e.kind === 'ironclad') {
         g.strokeStyle = 'rgba(0,0,0,.35)';
         g.lineWidth = 2;
         for (var j = -1; j <= 1; j++) {

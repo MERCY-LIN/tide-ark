@@ -508,6 +508,8 @@
 
   function hurt(b, e, amount, color, noBurst) {
     if (e.dead) return;
+    var arm = (e.def.armor || 0) + (b.plan.armorBonus || 0);
+    if (arm > 0) amount = Math.max(1, amount - arm);
     e.hp -= amount;
     e.hit = 0.14;
     b.dmgDealt += amount;
@@ -517,6 +519,26 @@
       burst(b, e.x, e.y, e.def.color, e.def.boss ? 26 : 8, e.def.boss ? 160 : 110);
       if (e.def.boss) pushLog(b, '潮汐巨兽倒下了');
       else floatText(b, e.x, e.y - 14, '✦', color || '#ffd479', 15);
+
+      /* 分裂：死亡时裂成两个小的 */
+      if (e.def.split && !e._split) {
+        e._split = true;
+        var sdef = D.ENEMIES[e.def.split];
+        if (sdef) {
+          for (var si2 = 0; si2 < 2; si2++) {
+            var shp = sdef.hp * (b.plan.hpMul || 1);
+            b.enemies.push({
+              id: b.seq++, kind: e.def.split, def: sdef, lane: sdef.lane, side: e.side,
+              x: e.x + (si2 ? 16 : -16), y: e.y,
+              hp: shp, maxHp: shp, r: sdef.r,
+              latched: false, enraged: e.enraged, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+              phase: 0, spdMul: 1, dmgMul: 1,
+              bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+            });
+          }
+          floatText(b, e.x, e.y - 18, '分裂', '#9fd36a', 13);
+        }
+      }
 
       /* 燃烧羁绊：击杀时炸开 */
       if (b.st.fireBurst && !noBurst && !e._burst) {
@@ -711,15 +733,32 @@
         if (e.dead) continue;
       }
       if (e.slowT > 0) e.slowT -= dt;
+      if (e.def.heal) {
+        e.healCd = (e.healCd || 2) - dt;
+        if (e.healCd <= 0) {
+          e.healCd = 2;
+          for (var hi = 0; hi < b.enemies.length; hi++) {
+            var tgt = b.enemies[hi];
+            if (tgt === e || tgt.dead || tgt.hp >= tgt.maxHp) continue;
+            var hdx = tgt.x - e.x, hdy = tgt.y - e.y;
+            if (hdx * hdx + hdy * hdy > 150 * 150) continue;
+            tgt.hp = Math.min(tgt.maxHp, tgt.hp + e.def.heal);
+            b.particles.push({ x: tgt.x, y: tgt.y, vx: 0, vy: -30, life: 0.5, max: 0.5, color: '#7fd6b0', r: 2.5 });
+          }
+        }
+      }
 
       if (!e.latched) {
         var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
+        var stand = e.def.standoff || 0;
         if (e.side === 'L') {
           e.x += spd * dt;
-          if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
+          var lx = edgeX('L') - stand;
+          if (e.x >= lx) { e.x = lx; e.latched = true; }
         } else {
           e.x -= spd * dt;
-          if (e.x <= edgeX('R')) { e.x = edgeX('R'); e.latched = true; }
+          var rx = edgeX('R') + stand;
+          if (e.x <= rx) { e.x = rx; e.latched = true; }
         }
         if (e.latched && (e.def.boss || e.kind === 'raider')) {
           pushLog(b, e.def.name + '撞上' + (e.side === 'L' ? '左舷' : '右舷'));
@@ -747,7 +786,7 @@
       if (m.cd > 0) { m.cd -= dt; continue; }
       var target = acquire(b, m);
       if (!target) continue;
-      var rate = b.st.rateMul;
+      var rate = b.st.rateMul * (b.plan.rateMul || 1);
       if (m.boosted) rate *= 1 / (b.st.boostMul || 1.2);
       if (m.flooded) rate *= 1.25;
       if (m.ampBonus) rate *= 1 / (1 + m.ampBonus);
