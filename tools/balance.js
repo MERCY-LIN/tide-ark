@@ -1,4 +1,8 @@
-/* headless 数值回归：用贪心 AI 跑多局，检验 8 波是否可通、曲线是否合理 */
+﻿/* headless 数值回归：用贪心 AI 跑多局，检验曲线是否合理
+   用法：
+     node tools/balance.js 400
+     node tools/balance.js 1 --trace
+*/
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -12,6 +16,7 @@ vm.runInContext(fs.readFileSync(path.join(base, 'data.js'), 'utf8'), ctx, { file
 vm.runInContext(fs.readFileSync(path.join(base, 'core.js'), 'utf8'), ctx, { filename: 'core.js' });
 
 const D = ctx.Data, C = ctx.Core;
+const TRACE = process.argv.includes('--trace');
 
 /* ---------- 布局工具 ---------- */
 function colOrder(sides) {
@@ -41,7 +46,8 @@ function tryBuy(run, id, order) {
 }
 
 /* ---------- 贪心 AI ---------- */
-function buildPhase(run, plan, verbose) {
+function buildPhase(run) {
+  const plan = run.plan;
   const lanesNeeded = {};
   plan.spawns.forEach(s => {
     const l = D.ENEMIES[s.kind].lane;
@@ -50,26 +56,31 @@ function buildPhase(run, plan, verbose) {
   const order = colOrder(plan.sides);
   const lanePick = { surface: run.wave >= 5 ? 'tesla' : 'ballista', air: 'flak', under: 'harpoon' };
   const laneBase = { surface: 'ballista', air: 'flak', under: 'harpoon' };
-  let guard = 0;
 
+  /* 0. 扩建：空位紧张、钱又够，就加一列 */
+  let guard0 = 0;
+  while (guard0++ < 5) {
+    let free = 0;
+    for (const r of [0, 1, 2]) for (const c of run.unlocked) if (!run.grid[r * D.COLS + c]) free++;
+    if (free >= 4) break;
+    const candidates = D.EXPAND
+      .filter(e => !C.isUnlocked(run, e.col))
+      .filter(e => C.canExpand(run, e.col) === null)
+      .filter(e => run.wood >= e.cost + 14);
+    if (!candidates.length) break;
+    /* 只看威胁侧是否已经有外挂列，没有就优先补 */
+    const wantCol = order[0];
+    candidates.sort((a, b) => Math.abs(a.col - wantCol) - Math.abs(b.col - wantCol));
+    if (C.expand(run, candidates[0].col) !== null) break;
+  }
+
+  let guard = 0;
   while (guard++ < 60) {
     const st = C.computeStats(run);
     const cells = C.cellsOf(run);
+    const unlocked = run.unlocked;
 
-    /* 1. 缺电的层先配发电机（发电机可放任意层） */
-    const unpowered = cells.filter(x => x.def.kind === 'weapon' && !st.powered[C.idx(x.c, x.r)]);
-    if (unpowered.length > 0) {
-      const target = unpowered[0];
-      let placed = false;
-      const cols = [target.c, target.c - 1, target.c + 1, target.c + 2, target.c - 2]
-        .filter(c => c >= 0 && c < D.COLS);
-      for (const c of cols) {
-        if (C.canPlace(run, 'gen', c, target.r) === null) { C.place(run, 'gen', c, target.r); placed = true; break; }
-      }
-      if (placed) continue;
-    }
-
-    /* 2. 按"敌人数 / 已有武器数"给泳道补炮 */
+    /* 1. 按"敌人数 / 已有武器数"补炮 */
     const lanes = Object.keys(lanesNeeded).sort((a, b) => {
       const ra = lanesNeeded[a] / (laneWeapons(run, a).length + 1);
       const rb = lanesNeeded[b] / (laneWeapons(run, b).length + 1);
@@ -84,82 +95,102 @@ function buildPhase(run, plan, verbose) {
     }
     if (acted) continue;
 
-    /* 3. 弹药库加成 */
-    if (run.wood >= 40) {
+    /* 2. 弹药库（贴着已有武器） */
+    if (run.wood >= 44) {
       const w = cells.filter(x => x.def.kind === 'weapon' && !x.def.chain);
       if (w.length) {
         const t = w[Math.floor(Math.random() * w.length)];
-        if (C.canPlace(run, 'mag', t.c + 1, 1) === null) { C.place(run, 'mag', t.c + 1, 1); continue; }
-        if (C.canPlace(run, 'mag', t.c - 1, 1) === null) { C.place(run, 'mag', t.c - 1, 1); continue; }
+        for (const c of [t.c + 1, t.c - 1]) {
+          if (unlocked.includes(c) && C.canPlace(run, 'mag', c, 1) === null) {
+            C.place(run, 'mag', c, 1); acted = true; break;
+          }
+        }
       }
+      if (acted) continue;
+    }
+
+    /* 3. 发电机（给武器最多的那一层） */
+    if (run.wood >= 34) {
+      const perRow = [0, 0, 0];
+      cells.filter(x => x.def.kind === 'weapon').forEach(x => { perRow[x.r]++; });
+      let bestRow = -1, bestN = 0;
+      for (let r = 0; r < 3; r++) {
+        if (!st.boost[r] && perRow[r] > bestN) { bestN = perRow[r]; bestRow = r; }
+      }
+      if (bestRow >= 0) {
+        for (const c of order) {
+          if (unlocked.includes(c) && C.canPlace(run, 'gen', c, bestRow) === null) {
+            C.place(run, 'gen', c, bestRow); acted = true; break;
+          }
+        }
+      }
+      if (acted) continue;
     }
 
     /* 4. 耐久 / 抽水泵 */
     if (run.wood >= 30) {
-      if (C.canPlace(run, 'armor', order[0], 2) === null) { C.place(run, 'armor', order[0], 2); continue; }
-      if (run.wave >= 5 && C.canPlace(run, 'pump', order[0], 2) === null) { C.place(run, 'pump', order[0], 2); continue; }
-    }
-
-    /* 5. 打捞臂 */
-    if (run.wood >= 30) {
-      if (C.canPlace(run, 'salvage', order[0], 0) === null) { C.place(run, 'salvage', order[0], 0); continue; }
+      for (const c of order) {
+        if (unlocked.includes(c) && C.canPlace(run, 'armor', c, 2) === null) {
+          C.place(run, 'armor', c, 2); acted = true; break;
+        }
+      }
+      if (acted) continue;
     }
     break;
   }
 }
 
 function pickCard(run, cards) {
-  const mods = cards.filter(c => c.type === 'module');
-  if (run.hp < C.computeStats(run).maxHp * 0.5) {
+  const st = C.computeStats(run);
+  if (run.hp < st.maxHp * 0.45) {
     const rep = cards.find(c => c.type === 'repair');
     if (rep) return rep;
   }
+  const up = cards.find(c => c.type === 'upgrade');
+  if (up && Math.random() < 0.7) return up;
+  const mods = cards.filter(c => c.type === 'module');
   if (mods.length) return mods[0];
   return cards.find(c => c.type === 'wood') || cards[0];
 }
 
-/* ---------- 单局 ---------- */
-const TRACE = process.argv.includes('--trace');
-
 function dumpBoard(run, w) {
-  console.log(`\n--- W${w} 甲板 (wood ${run.wood}, hp ${run.hp}) ---`);
+  console.log(`\n--- W${w} 甲板 (wood ${run.wood}, hp ${run.hp}/${C.computeStats(run).maxHp}) ---`);
+  console.log('  解锁列: ' + run.unlocked.join(','));
+  const ups = Object.keys(run.up).filter(k => run.up[k] > 0).map(k => D.UPGRADES[k].name + '×' + run.up[k]);
+  console.log('  改造: ' + (ups.join(' · ') || '无'));
+  const p = run.plan;
+  console.log('  词条: ' + (p.mod ? p.mod.name + '（' + p.mod.desc + '）' : '无') +
+    '  来袭: ' + p.sides.join('/') + '  单位: ' + p.spawns.length);
   for (let r = 0; r < D.ROWS; r++) {
     const row = [];
     for (let c = 0; c < D.COLS; c++) {
+      if (!run.unlocked.includes(c)) { row.push('  ▩ '); continue; }
       const id = run.grid[r * D.COLS + c];
-      row.push(id ? D.MODULES[id].name : '·'.repeat(4));
+      row.push(id ? D.MODULES[id].name.padEnd(4, '　') : '　·　');
     }
-    console.log('  ' + D.ROW_NAME[r] + ' | ' + row.join(' | '));
+    console.log('  ' + D.ROW_NAME[r] + ' | ' + row.join('|'));
   }
 }
 
 function logBattle(b) {
-  const laneDps = {};
-  b.modules.filter(m => m.def.kind === 'weapon').forEach(m => {
-    const base = (m.def.radius || m.def.chain) ? m.def.dmg * (m.def.chain || 2.2) / m.def.cd : m.def.dmg / m.def.cd;
-    const lane = m.def.lane;
-    laneDps[lane] = (laneDps[lane] || 0) + base * (1 + m.mag) * (m.powered ? 1 : 0.78) * (m.flooded ? 0.53 : 1);
-  });
   const alive = {};
   b.enemies.forEach(e => { alive[e.kind] = (alive[e.kind] || 0) + 1; });
   const latched = b.enemies.filter(e => e.latched).length;
   console.log(`  t=${b.t.toFixed(0).padStart(3)}s tide=${b.tide.toFixed(2)} hp=${b.hp.toFixed(0).padStart(3)}/${b.maxHp} ` +
-    `alive=${b.enemies.length}(${latched}咬) 击杀=${b.killed} ` +
-    `DPS[海${(laneDps.surface || 0).toFixed(0)} 空${(laneDps.air || 0).toFixed(0)} 潜${(laneDps.under || 0).toFixed(0)} 全${(laneDps.any || 0).toFixed(0)}] ` +
-    JSON.stringify(alive));
+    `活=${b.enemies.length}(${latched}咬) 杀=${b.killed} ${JSON.stringify(alive)}`);
 }
 
+/* ---------- 单局 ---------- */
 function playOne(log) {
-  const run = C.newRun();
+  const run = C.newRun(12345 + (log ? 0 : Math.floor(Math.random() * 1e6)));
   const trace = [];
 
   for (let w = 1; w <= D.MAX_WAVE; w++) {
-    const plan = D.wavePlan(w, run.extraDivers);
-    buildPhase(run, plan);
+    const plan = run.plan;
+    buildPhase(run);
     if (TRACE && w === D.MAX_WAVE) dumpBoard(run, w);
 
     const b = C.startBattle(run);
-    const enemyHp = b.enemies.length; // 0, spawn later
     let totalHp = 0;
     b.plan.spawns.forEach(s => { totalHp += D.ENEMIES[s.kind].hp * b.plan.hpMul; });
 
@@ -167,35 +198,43 @@ function playOne(log) {
     let nextLog = 0;
     while (!b.result && guard++ < 60 * 200) {
       C.step(b, 1 / 60);
-      if (TRACE && w === D.MAX_WAVE && b.t >= nextLog) { nextLog += 3; logBattle(b); }
+      if (TRACE && w === D.MAX_WAVE && b.t >= nextLog) { nextLog += 4; logBattle(b); }
     }
-    if (TRACE && w === D.MAX_WAVE) console.log(`  => ${b.result}, 总伤害 ${Math.round(b.dmgDealt)} / 敌方 ${Math.round(totalHp)}`);
 
     const weapons = b.modules.filter(m => m.def.kind === 'weapon');
     trace.push({
       wave: w,
       enemyHp: Math.round(totalHp),
       dmg: Math.round(b.dmgDealt),
+      leak: Math.round(b.leak),
       weapons: weapons.length,
       modules: b.modules.length,
+      cols: run.unlocked.length,
       hp: Math.round(b.hp),
       maxHp: Math.round(b.maxHp),
-      leak: Math.round(b.leak),
       tide: +b.tide.toFixed(2),
-      kills: b.killed,
+      killed: b.killed,
+      mod: b.plan.mod ? b.plan.mod.name : '',
       result: b.result
     });
 
-    if (b.result !== 'won') {
-      return { won: false, wave: w, trace, run };
+    if (TRACE && w === D.MAX_WAVE) {
+      console.log(`  => ${b.result} · 伤害 ${Math.round(b.dmgDealt)} / 敌方 ${Math.round(totalHp)} · 掉血 ${Math.round(b.leak)}`);
+      console.log('  战报: ' + b.log.slice(-4).map(x => `[${x.t.toFixed(0)}s]${x.txt}`).join(' | '));
     }
+
+    if (b.result !== 'won') return { won: false, wave: w, trace, run, battle: b };
     run.kills += b.killed;
 
-    C.afterWave(run, b);
+    const gain = C.afterWave(run, b);
+    if (w >= D.MAX_WAVE) return { won: true, wave: w, trace, run, battle: b, gain };
+
     const cards = C.rollCards(run);
     C.applyCard(run, pickCard(run, cards));
-    run.extraDivers = 0;
+
     run.wave = w + 1;
+    run.dived = false;
+    C.planWave(run);
   }
   return { won: true, wave: D.MAX_WAVE, trace, run };
 }
@@ -203,7 +242,7 @@ function playOne(log) {
 /* ---------- 批量 ---------- */
 if (TRACE) {
   const r = playOne(true);
-  console.log(`\n结果: ${r.won ? '通关' : '止步 W' + r.wave}`);
+  console.log(`\n结果: ${r.won ? '通关' : '止步 W' + r.wave}（击杀 ${r.run.kills}）`);
   process.exit(0);
 }
 
@@ -213,19 +252,21 @@ let wins = 0;
 const agg = {};
 
 for (let i = 0; i < N; i++) {
-  const r = playOne();
+  const r = playOne(false);
   if (r.won) wins++;
   dist[r.wave] = (dist[r.wave] || 0) + 1;
   r.trace.forEach(t => {
-    if (!agg[t.wave]) agg[t.wave] = { dmg: 0, enemyHp: 0, hp: 0, maxHp: 0, weapons: 0, modules: 0, n: 0, tide: 0, leak: 0 };
+    if (!agg[t.wave]) agg[t.wave] = { dmg: 0, enemyHp: 0, hp: 0, maxHp: 0, weapons: 0, modules: 0, cols: 0, n: 0, tide: 0, leak: 0, mods: 0 };
     agg[t.wave].dmg += t.dmg;
     agg[t.wave].enemyHp += t.enemyHp;
     agg[t.wave].hp += t.hp;
     agg[t.wave].maxHp += t.maxHp;
     agg[t.wave].weapons += t.weapons;
     agg[t.wave].modules += t.modules;
+    agg[t.wave].cols += t.cols;
     agg[t.wave].leak += t.leak;
     agg[t.wave].tide += t.tide;
+    if (t.mod) agg[t.wave].mods++;
     agg[t.wave].n++;
   });
 }
@@ -239,10 +280,10 @@ Object.keys(dist).sort((a, b) => a - b).forEach(k => {
 });
 
 console.log('\n逐波均值:');
-console.log('  波次  武器  模块  敌方HP   我方伤害  伤害/HP   掉血   剩余耐久   满潮');
+console.log('  波次  武器  模块  列数  敌方HP   我方伤害  伤害/HP   掉血   剩余耐久   潮位  带词条');
 Object.keys(agg).sort((a, b) => a - b).forEach(k => {
   const a = agg[k];
   const ratio = (a.dmg / Math.max(1, a.enemyHp)).toFixed(2);
-  console.log(`  W${String(k).padStart(2)}  ${(a.weapons / a.n).toFixed(1).padStart(4)}  ${(a.modules / a.n).toFixed(1).padStart(4)}  ${String(Math.round(a.enemyHp / a.n)).padStart(6)}  ${String(Math.round(a.dmg / a.n)).padStart(8)}  ${String(ratio).padStart(6)}  ${String(Math.round(a.leak / a.n)).padStart(5)}   ${String(Math.round(a.hp / a.n)).padStart(3)}/${Math.round(a.maxHp / a.n)}   ${(a.tide / a.n).toFixed(2)}`);
+  console.log(`  W${String(k).padStart(2)}  ${(a.weapons / a.n).toFixed(1).padStart(4)}  ${(a.modules / a.n).toFixed(1).padStart(4)}  ${(a.cols / a.n).toFixed(1).padStart(4)}  ${String(Math.round(a.enemyHp / a.n)).padStart(6)}  ${String(Math.round(a.dmg / a.n)).padStart(8)}  ${String(ratio).padStart(6)}  ${String(Math.round(a.leak / a.n)).padStart(5)}   ${String(Math.round(a.hp / a.n)).padStart(3)}/${Math.round(a.maxHp / a.n)}   ${(a.tide / a.n).toFixed(2)}   ${Math.round(a.mods / a.n * 100)}%`);
 });
 console.log('');

@@ -1,5 +1,5 @@
 ﻿/* ============================================================
-   潮汐方舟  Tide Ark
+   潮汐方舟  Tide Ark  v0.2
    data.js —— 纯数值与内容表（无 DOM 依赖）
    ============================================================ */
 (function (root) {
@@ -17,20 +17,23 @@
   var RAFT_H = ROWS * CELL;                 // 174
   var WATER_LOW = RAFT_Y + 2 * CELL;        // 384 低潮水位
   var WATER_HIGH = 300;                     // 满潮水位
-  var FLOOD_Y = RAFT_Y + CELL;              // 326 超过这里主甲板进水
+  var FLOOD_Y = RAFT_Y + CELL;              // 326 越过这里主甲板进水
 
   var ROW_LANE = ['air', 'surface', 'under'];
   var ROW_NAME = ['高空甲板', '主甲板', '水下舱'];
 
-  /* ---------- 模块 ----------
-     row   只能放在这一行（行 = 能打到哪条泳道）
-     kind  weapon 武器 / utility 功能
-     lane  weapon 的目标泳道，any = 全泳道
-     range 以"列"为单位的半径（1 列 = 58px）
-     radius 范围伤害半径(px)   chain 连锁目标数
-     effect 功能模块效果：power 整层供电 / mag 相邻增伤 / pump 潮速 / armor 耐久 / salvage 打捞 */
+  /* ---------- 甲板：一开始只有中间两列 ---------- */
+  var START_COLS = [2, 3];
+  /* 只能买"挨着已解锁列"的列；外挂列最贵，但它决定你能打多远 */
+  var EXPAND = [
+    { col: 1, cost: 30, hp: 20 },
+    { col: 4, cost: 30, hp: 20 },
+    { col: 0, cost: 50, hp: 30 },
+    { col: 5, cost: 50, hp: 30 }
+  ];
+
+  /* ---------- 模块 ---------- */
   var MODULES = {
-    /* ---- row 0 高空甲板 ---- */
     flak: {
       name: '高射炮', row: 0, kind: 'weapon', lane: 'air', cost: 16,
       dmg: 15, cd: 0.8, range: 6, color: '#7fc8e8', icon: 'flak',
@@ -41,8 +44,6 @@
       color: '#d4a373', icon: 'salvage',
       desc: '每波结束额外 +8 木材'
     },
-
-    /* ---- row 1 主甲板 ---- */
     ballista: {
       name: '弩炮', row: 1, kind: 'weapon', lane: 'surface', cost: 12,
       dmg: 16, cd: 1.05, range: 6, color: '#e0a458', icon: 'bolt',
@@ -59,17 +60,15 @@
       desc: '全泳道 · 连锁 3 目标 · 12 伤害'
     },
     gen: {
-      name: '发电机', row: -1, kind: 'utility', effect: 'power', cost: 14,
+      name: '发电机', row: -1, kind: 'utility', effect: 'power', cost: 12,
       color: '#8fd14f', icon: 'gen',
-      desc: '可放任意层 · 为本层全部武器供电（缺电射速 -28%）'
+      desc: '可放任意层 · 本层武器射速 +20%'
     },
     mag: {
       name: '弹药库', row: 1, kind: 'utility', effect: 'mag', cost: 20,
       color: '#c9a227', icon: 'mag',
       desc: '相邻武器伤害 +25%（最多 +50%）'
     },
-
-    /* ---- row 2 水下舱 ---- */
     harpoon: {
       name: '鱼叉炮', row: 2, kind: 'weapon', lane: 'under', cost: 16,
       dmg: 30, cd: 1.8, range: 6, color: '#9b8ae0', icon: 'harpoon',
@@ -94,29 +93,41 @@
 
   var ORDER = ['ballista', 'flamer', 'tesla', 'gen', 'mag', 'flak', 'salvage', 'harpoon', 'depth', 'armor', 'pump'];
 
+  /* ---------- 全局改造（打捞三选一里的被动） ---------- */
+  var UPGRADES = {
+    barrel: { name: '加长炮管', desc: '所有武器射程 +1 列', max: 3 },
+    ap: { name: '穿甲弹头', desc: '所有武器伤害 +12%', max: 5 },
+    loader: { name: '快速装填', desc: '所有武器射速 +12%', max: 4 },
+    hull: { name: '船体加固', desc: '木筏耐久上限 +40', max: 4 },
+    salvager: { name: '打捞专家', desc: '每波结束额外 +10 木材', max: 3 },
+    aa: { name: '防空火控', desc: '对空伤害 +35%', max: 3 },
+    asw: { name: '深水猎手', desc: '对潜伤害 +35%', max: 3 },
+    tide: { name: '潮汐预感', desc: '潮水上涌速度 -12%', max: 3 },
+    patch: { name: '维修班', desc: '每波开始修复 +10 耐久', max: 3 }
+  };
+  var UPGRADE_ORDER = ['barrel', 'ap', 'loader', 'hull', 'salvager', 'aa', 'asw', 'tide', 'patch'];
+
   /* ---------- 敌人 ---------- */
   var ENEMIES = {
-    drifter: { name: '漂流者', lane: 'surface', hp: 34, spd: 64, dmg: 5, r: 16, color: '#79b86a' },
-    shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a' },
-    bat: { name: '潮蝠', lane: 'air', hp: 26, spd: 96, dmg: 4, r: 14, color: '#9b7fd4' },
-    diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9' },
-    raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a' },
-    boss: { name: '潮汐巨兽', lane: 'surface', hp: 520, spd: 18, dmg: 16, r: 50, color: '#e0577f', boss: true }
+    drifter: { name: '漂流者', lane: 'surface', hp: 34, spd: 64, dmg: 5, r: 16, color: '#79b86a', pts: 1 },
+    bat: { name: '潮蝠', lane: 'air', hp: 26, spd: 96, dmg: 4, r: 14, color: '#9b7fd4', pts: 0.9 },
+    diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9', pts: 1.9 },
+    shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a', pts: 2.8 },
+    raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a', pts: 3.4 },
+    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 }
   };
 
-  /* ---------- 波次表 ---------- */
-  var WAVE_TABLE = [
-    { dur: 26, comp: [['drifter', 5, 'L']] },
-    { dur: 28, comp: [['drifter', 5, 'L'], ['drifter', 3, 'R']] },
-    { dur: 30, comp: [['drifter', 5, 'L'], ['bat', 3, 'R']] },
-    { dur: 30, comp: [['shellback', 2, 'L'], ['drifter', 4, 'R'], ['bat', 3, 'R']] },
-    { dur: 32, comp: [['diver', 3, 'L'], ['drifter', 4, 'R'], ['bat', 2, 'L']] },
-    { dur: 32, comp: [['shellback', 3, 'R'], ['diver', 3, 'R'], ['bat', 3, 'L'], ['drifter', 4, 'L']] },
-    { dur: 34, comp: [['raider', 1, 'L'], ['shellback', 3, 'R'], ['diver', 3, 'L'], ['bat', 4, 'R']] },
-    { dur: 38, comp: [['boss', 1, 'R'], ['diver', 2, 'L'], ['bat', 2, 'L'], ['drifter', 2, 'R']] }
+  /* ---------- 潮汐词条：每波一个，逼你换打法 ---------- */
+  var MODS = [
+    { id: 'current', name: '逆流', desc: '敌方移动速度 +35%', spd: 1.35 },
+    { id: 'fog', name: '浓雾', desc: '所有武器射程 -20%', range: 0.8 },
+    { id: 'iron', name: '铁潮', desc: '敌方生命 +30%', hp: 1.3 },
+    { id: 'swarm', name: '蜂群', desc: '敌方数量 +3，生命 -25%', hp: 0.75, add: 3 },
+    { id: 'blood', name: '血月', desc: '敌方啃咬伤害 +50%', dmg: 1.5 },
+    { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] }
   ];
 
-  var MAX_WAVE = WAVE_TABLE.length;
+  var MAX_WAVE = 8;
 
   /* ---------- 确定性随机 ---------- */
   function mulberry32(a) {
@@ -128,27 +139,70 @@
     };
   }
 
-  /* ---------- 生成一波 ---------- */
-  function wavePlan(wave, extraDivers) {
-    var w = WAVE_TABLE[Math.min(wave, MAX_WAVE) - 1];
+  function poolFor(wave) {
+    var p = ['drifter'];
+    if (wave >= 3) p.push('bat');
+    if (wave >= 5) p.push('diver');
+    if (wave >= 6) p.push('shellback');
+    if (wave >= 7) p.push('raider');
+    return p;
+  }
+
+  /* ---------- 生成一波 ----------
+     用 run 的 rng：同一局内可复现，不同局完全不同 */
+  function makePlan(wave, rng) {
+    var isBoss = wave >= MAX_WAVE;
     var list = [];
-    w.comp.forEach(function (c) {
-      for (var i = 0; i < c[1]; i++) list.push({ kind: c[0], side: c[2] });
-    });
-    for (var i = 0; i < (extraDivers || 0); i++) {
-      list.push({ kind: 'diver', side: i % 2 ? 'R' : 'L' });
+    var pool = poolFor(wave);
+    var budget;
+    var mod = null;
+
+    if (isBoss) {
+      list.push({ kind: 'boss', side: rng() < 0.5 ? 'L' : 'R' });
+      budget = 7;
+    } else {
+      budget = 4.4 * Math.pow(1.235, wave - 1);
     }
 
-    /* 打散顺序（固定种子，可复现），Boss 提到最前 */
-    var rnd = mulberry32(1000 + wave * 77);
-    for (var i = list.length - 1; i > 0; i--) {
-      var j = Math.floor(rnd() * (i + 1));
-      var t = list[i]; list[i] = list[j]; list[j] = t;
+    var guard = 0;
+    while (budget >= 0.8 && guard++ < 80) {
+      var affordable = pool.filter(function (k) { return ENEMIES[k].pts <= budget; });
+      if (!affordable.length) break;
+      var k = affordable[Math.floor(rng() * affordable.length)];
+      list.push({ kind: k, side: rng() < 0.5 ? 'L' : 'R' });
+      budget -= ENEMIES[k].pts;
+    }
+
+    /* 词条：第 3 波起可能出现，Boss 波不带 */
+    if (!isBoss && wave >= 4 && rng() < 0.6) {
+      mod = MODS[Math.floor(rng() * MODS.length)];
+      if (mod.add) {
+        for (var i = 0; i < mod.add; i++) {
+          list.push({ kind: pool[Math.floor(rng() * pool.length)], side: rng() < 0.5 ? 'L' : 'R' });
+        }
+      }
+      if (mod.extra) {
+        mod.extra.forEach(function (k) {
+          list.push({ kind: k, side: rng() < 0.5 ? 'L' : 'R' });
+        });
+      }
+    }
+
+    /* 不要把所有东西都堆在一边 */
+    var lefts = list.filter(function (e) { return e.side === 'L'; }).length;
+    if (lefts === 0 && list.length > 1) list[0].side = 'L';
+    if (lefts === list.length && list.length > 1) list[list.length - 1].side = 'R';
+
+    /* 打散后按时间铺开 */
+    for (var j = list.length - 1; j > 0; j--) {
+      var q = Math.floor(rng() * (j + 1));
+      var t = list[j]; list[j] = list[q]; list[q] = t;
     }
     list.sort(function (a, b) { return (b.kind === 'boss' ? 1 : 0) - (a.kind === 'boss' ? 1 : 0); });
 
+    var dur = isBoss ? 38 : Math.min(34, 20 + list.length * 1.15);
     var n = list.length;
-    var t0 = 1.4, t1 = w.dur * 0.46;
+    var t0 = 1.4, t1 = dur * 0.46;
     list.forEach(function (e, i) {
       e.t = n <= 1 ? t0 : t0 + (t1 - t0) * (i / (n - 1));
     });
@@ -157,18 +211,21 @@
     list.forEach(function (e) { sides[e.side] = true; });
 
     return {
-      dur: w.dur,
+      wave: wave,
+      dur: dur,
       spawns: list,
       sides: Object.keys(sides).sort(),
-      hpMul: 1 + (wave - 1) * 0.16
+      mod: mod,
+      hpMul: (isBoss ? 1.25 : 1 + (wave - 1) * 0.06) * (mod && mod.hp ? mod.hp : 1),
+      spdMul: mod && mod.spd ? mod.spd : 1,
+      dmgMul: mod && mod.dmg ? mod.dmg : 1,
+      rangeMul: mod && mod.range ? mod.range : 1
     };
   }
 
-  /* ---------- 波次预告 ---------- */
-  function wavePreview(wave, extraDivers) {
-    var p = wavePlan(wave, extraDivers || 0);
+  function previewOf(plan) {
     var count = {};
-    p.spawns.forEach(function (s) {
+    plan.spawns.forEach(function (s) {
       count[s.kind] = (count[s.kind] || 0) + 1;
     });
     var parts = [];
@@ -176,8 +233,9 @@
       parts.push(ENEMIES[k].name + '×' + count[k]);
     });
     return {
-      sides: p.sides.map(function (s) { return s === 'L' ? '左舷' : '右舷'; }).join(' + '),
-      text: parts.join(' · ')
+      sides: plan.sides.map(function (s) { return s === 'L' ? '左舷' : '右舷'; }).join(' + '),
+      text: parts.join(' · '),
+      mod: plan.mod
     };
   }
 
@@ -187,8 +245,10 @@
     RAFT_X: RAFT_X, RAFT_Y: RAFT_Y, RAFT_W: RAFT_W, RAFT_H: RAFT_H,
     WATER_LOW: WATER_LOW, WATER_HIGH: WATER_HIGH, FLOOD_Y: FLOOD_Y,
     ROW_LANE: ROW_LANE, ROW_NAME: ROW_NAME,
+    START_COLS: START_COLS, EXPAND: EXPAND,
     MODULES: MODULES, ORDER: ORDER,
-    ENEMIES: ENEMIES, WAVE_TABLE: WAVE_TABLE, MAX_WAVE: MAX_WAVE,
-    wavePlan: wavePlan, wavePreview: wavePreview, mulberry32: mulberry32
+    UPGRADES: UPGRADES, UPGRADE_ORDER: UPGRADE_ORDER,
+    ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
+    makePlan: makePlan, previewOf: previewOf, mulberry32: mulberry32
   };
 })(typeof window !== 'undefined' ? window : globalThis);

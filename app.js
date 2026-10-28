@@ -339,21 +339,24 @@
       ctx.fillStyle = 'rgba(255,255,255,' + (opt.flash * 4) + ')';
       ctx.fill();
     }
-    if (opt.unpowered) {
+    if (opt.boosted) {
       ctx.beginPath();
-      ctx.arc(cx + half - 6, cy - half + 6, 3, 0, 6.283);
-      ctx.fillStyle = '#d1553f';
+      ctx.arc(cx + half - 6, cy - half + 6, 2.6, 0, 6.283);
+      ctx.fillStyle = '#8fd14f';
       ctx.fill();
     }
   }
 
   function drawModulesBuild(t, bob) {
+    var st = C.computeStats(S.run);
     for (var r = 0; r < D.ROWS; r++) {
       for (var c = 0; c < D.COLS; c++) {
         var id = S.run.grid[C.idx(c, r)];
         if (!id) continue;
         var def = D.MODULES[id];
-        moduleVisual(g, def, D.RAFT_X + c * CELL + CELL / 2, D.RAFT_Y + r * CELL + CELL / 2 + bob, CELL - 10, {});
+        moduleVisual(g, def, D.RAFT_X + c * CELL + CELL / 2, D.RAFT_Y + r * CELL + CELL / 2 + bob, CELL - 10, {
+          boosted: st.boost[r] && def.kind === 'weapon'
+        });
       }
     }
   }
@@ -364,7 +367,7 @@
       moduleVisual(g, m.def, m.x, m.y + bob, CELL - 10, {
         flash: m.flash,
         flooded: m.flooded,
-        unpowered: !m.powered && m.def.kind === 'weapon'
+        boosted: m.boosted && m.def.kind === 'weapon'
       });
     }
   }
@@ -582,6 +585,40 @@
       g.beginPath(); g.moveTo(x, y + r * CELL); g.lineTo(x + D.RAFT_W, y + r * CELL); g.stroke();
     }
 
+    /* 未加固的列 */
+    for (var lc = 0; lc < D.COLS; lc++) {
+      if (C.isUnlocked(S.run, lc)) continue;
+      var lx = x + lc * CELL;
+      var e = C.expandDef(lc);
+      var canBuy = C.canExpand(S.run, lc) === null;
+      g.save();
+      g.beginPath();
+      g.rect(lx, y, CELL, D.RAFT_H);
+      g.clip();
+      g.fillStyle = 'rgba(4,9,14,.80)';
+      g.fillRect(lx, y, CELL, D.RAFT_H);
+      g.strokeStyle = 'rgba(120,160,180,.13)';
+      g.lineWidth = 1;
+      for (var dg = -D.RAFT_H; dg < CELL; dg += 13) {
+        g.beginPath();
+        g.moveTo(lx + dg, y + D.RAFT_H);
+        g.lineTo(lx + dg + D.RAFT_H, y);
+        g.stroke();
+      }
+      g.restore();
+
+      g.save();
+      g.textAlign = 'center';
+      g.font = '11px "Microsoft YaHei", sans-serif';
+      g.fillStyle = canBuy ? '#8ff0c4' : '#456575';
+      g.fillText('加固', lx + CELL / 2, y + D.RAFT_H / 2 - 12);
+      g.font = '700 13px "Microsoft YaHei", sans-serif';
+      g.fillStyle = canBuy ? '#ffcf8a' : '#456575';
+      g.fillText(e ? e.cost : '', lx + CELL / 2, y + D.RAFT_H / 2 + 8);
+      g.restore();
+      g.textAlign = 'left';
+    }
+
     /* 选中模块时的可放置高亮 */
     if (S.sel) {
       var def = D.MODULES[S.sel];
@@ -597,7 +634,7 @@
       if (S.hoverCell) {
         var hc = S.hoverCell.col, hr = def.row >= 0 ? def.row : S.hoverCell.row;
         var cx = x + hc * CELL + CELL / 2;
-        var reach = (def.range || 0) * CELL;
+        var reach = ((def.range || 0) + C.computeStats(S.run).rangeBonus) * CELL;
         if (reach > 0) {
           g.fillStyle = 'rgba(255,220,150,.10)';
           g.fillRect(cx - reach, y + hr * CELL, reach * 2, CELL);
@@ -633,7 +670,7 @@
     var bottom = D.RAFT_Y + D.RAFT_H + 22;
     if (waterY >= bottom) return;
     g.save();
-    g.globalAlpha = 0.26;
+    g.globalAlpha = 0.17;
     g.fillStyle = '#12657f';
     g.fillRect(D.RAFT_X - 16, waterY + bob, D.RAFT_W + 32, bottom - waterY);
     g.globalAlpha = 0.55;
@@ -707,6 +744,12 @@
     drawSea(t, waterY);
 
     var bob = drawRaft(t, waterY);
+    /* 未加固的列在战斗里也要看出是断的 */
+    for (var lc2 = 0; lc2 < D.COLS; lc2++) {
+      if (C.isUnlocked(S.run, lc2)) continue;
+      g.fillStyle = 'rgba(3,8,13,.42)';
+      g.fillRect(D.RAFT_X + lc2 * CELL, D.RAFT_Y + bob, CELL, D.RAFT_H);
+    }
 
     if (b) {
       drawModulesBattle(b, bob);
@@ -733,7 +776,7 @@
 
     /* 建造阶段的来袭方向 */
     if (!b) {
-      var preview = D.wavePreview(S.run.wave, S.run.extraDivers);
+      var preview = S.run.plan ? D.previewOf(S.run.plan) : { sides: [] };
       drawSideArrows(preview, t);
     }
 
@@ -756,6 +799,7 @@
   function hasFreeSlot(id) {
     var def = D.MODULES[id];
     for (var c = 0; c < D.COLS; c++) {
+      if (!C.isUnlocked(S.run, c)) continue;
       if (def.row < 0) {
         for (var r = 0; r < D.ROWS; r++) if (!S.run.grid[C.idx(c, r)]) return true;
       } else if (!S.run.grid[C.idx(c, def.row)]) return true;
@@ -849,15 +893,25 @@
   function updatePreview() {
     var el = $('preview');
     if (!S.started) { el.textContent = ''; return; }
-    if (S.phase === 'build') {
-      var pv = D.wavePreview(S.run.wave, S.run.extraDivers);
-      var extra = S.run.extraDivers ? ' <span class="warn">(下潜引来 ' + S.run.extraDivers + ' 只深潜者)</span>' : '';
+    if (S.phase === 'build' && S.run.plan) {
+      var pv = D.previewOf(S.run.plan);
+      var lanes = { surface: 0, air: 0, under: 0 };
+      S.run.plan.spawns.forEach(function (s) { lanes[D.ENEMIES[s.kind].lane]++; });
+      var laneTxt = [];
+      if (lanes.surface) laneTxt.push('海面 ' + lanes.surface);
+      if (lanes.air) laneTxt.push('空中 ' + lanes.air);
+      if (lanes.under) laneTxt.push('水下 ' + lanes.under);
+      var modLine = pv.mod
+        ? '<div class="warn">词条 · ' + pv.mod.name + '：' + pv.mod.desc + '</div>'
+        : '<div class="k">本波无词条</div>';
       el.innerHTML =
         '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b></div>' +
-        '<div class="k">来袭：' + pv.text + '</div>' + extra;
+        '<div class="k">来袭：' + pv.text + '</div>' +
+        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine;
     } else if (S.battle) {
+      var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
-        '<div><span class="k">第 ' + S.battle.wave + ' 次潮汐</span> · 剩 ' + S.battle.enemies.length + ' 敌</div>' +
+        '<div><span class="k">第 ' + S.battle.wave + ' 次潮汐</span> · 剩 ' + S.battle.enemies.length + ' 敌' + mb + '</div>' +
         '<div class="k">击杀 ' + S.battle.killed + ' · 潮位 ' + Math.round(S.battle.tide * 100) + '%</div>';
     } else {
       el.innerHTML = '';
@@ -871,7 +925,13 @@
     var cell = S.hoverCell;
     var id = S.run.grid[C.idx(cell.col, cell.row)];
     var html = '';
-    if (id) {
+    if (!C.isUnlocked(S.run, cell.col)) {
+      var e = C.expandDef(cell.col);
+      var reason = C.canExpand(S.run, cell.col);
+      html = '<div class="tn" style="color:#8ff0c4">加固甲板 · 第 ' + (cell.col + 1) + ' 列</div>' +
+        '<div class="td">多 3 个格子，耐久上限 +' + (e ? e.hp : 0) + '</div>' +
+        '<div class="tc">' + (e ? e.cost + ' 木材' : '') + (reason ? ' · ' + reason : ' · 点击加固') + '</div>';
+    } else if (id) {
       var def = D.MODULES[id];
       html = '<div class="tn" style="color:' + def.color + '">' + def.name + '</div>' +
         '<div class="td">' + def.desc + '</div>' +
@@ -930,6 +990,14 @@
     var p = toCanvas(ev);
     var cell = cellAt(p.x, p.y);
     if (!cell) { S.sel = null; syncUI(); return; }
+
+    if (!C.isUnlocked(S.run, cell.col)) {
+      var errE = C.expand(S.run, cell.col);
+      if (errE) { toast(errE); return; }
+      toast('加固成功：多了 3 个格子');
+      syncUI();
+      return;
+    }
 
     var id = S.run.grid[C.idx(cell.col, cell.row)];
 
@@ -993,6 +1061,7 @@
       kills: b.killed
     };
     S.run.wave = cleared + 1;
+    C.planWave(S.run);
     S.phase = 'reward';
     showReward();
   }
@@ -1005,6 +1074,17 @@
         '<canvas data-icon="' + card.id + '" width="44" height="44"></canvas>' +
         '<div class="pn" style="color:' + def.color + '">' + def.name + '</div>' +
         '<div class="pd">' + def.desc + '</div>' +
+        '</div>';
+    }
+    if (card.type === 'upgrade') {
+      var u = D.UPGRADES[card.id];
+      var lvl = S.run.up[card.id] || 0;
+      return '<div class="pick" data-i="' + i + '">' +
+        '<span class="pt">改造</span>' +
+        '<canvas data-icon="upgrade" width="44" height="44"></canvas>' +
+        '<div class="pn" style="color:#f2e06b">' + u.name + '</div>' +
+        '<div class="pd">' + u.desc + '<br><span style="color:#5f8ea4">Lv.' + lvl + ' → ' + (lvl + 1) + '' +
+        (lvl + 1 >= u.max ? '（满）' : '') + '</span></div>' +
         '</div>';
     }
     if (card.type === 'wood') {
@@ -1052,6 +1132,19 @@
         ictx.moveTo(22, 8); ictx.lineTo(22, 36);
         ictx.moveTo(8, 22); ictx.lineTo(36, 22);
         ictx.stroke();
+      } else if (key === 'upgrade') {
+        ictx.strokeStyle = '#f2e06b';
+        ictx.lineWidth = 2.4;
+        ictx.beginPath();
+        ictx.arc(22, 22, 9, 0, Math.PI * 2);
+        ictx.stroke();
+        for (var a = 0; a < 6; a++) {
+          var ang = a * Math.PI / 3;
+          ictx.beginPath();
+          ictx.moveTo(22 + Math.cos(ang) * 10, 22 + Math.sin(ang) * 10);
+          ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
+          ictx.stroke();
+        }
       } else {
         var d = D.MODULES[key];
         drawIcon(ictx, d.icon, 22, 22, 14, d.color);
@@ -1122,13 +1215,14 @@
       '<p>你有一条破木筏。每次<span class="hl">退潮</span>时打捞、建造；每次<span class="hl">涨潮</span>时海怪扑上来，' +
       '你的模块自动开火。撑过 <span class="hl">8 次潮汐</span>。</p>' +
       '<div class="infogrid">' +
+      '<div class="k">甲板是钱</div><div class="v">一开始只有<b>中间两列</b>。点两侧的暗格花木材<b>加固</b>，每列多 3 个格子</div>' +
       '<div class="k">三层甲板</div><div class="v">高空甲板只打<b>空中</b>，主甲板只打<b>海面</b>，水下舱只打<b>水下</b></div>' +
-      '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。来袭方向会提前标在画面上（← 左舷 / 右舷 →）</div>' +
+      '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。没加固外侧列，就够不着远处的敌人</div>' +
       '<div class="k">射程</div><div class="v">射程按<b>列</b>算。靠边的炮更能覆盖自己这一侧</div>' +
-      '<div class="k">供电</div><div class="v">每层放一台<b>发电机</b>，否则这层武器射速 -28%</div>' +
-      '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，必死</div>' +
+      '<div class="k">潮汐词条</div><div class="v">每波可能带一个词条（<b>浓雾/蜂群/血月</b>…），会直接改这波的打法</div>' +
+      '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
-      '<p class="hintline">左键选中模块 → 点格子放置 · 点已有模块可拆除（回收一半） · 右键/Esc 取消 · 空格开战</p>' +
+      '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
       '<div class="modal-actions"><button class="btn primary" id="btnStart">' + (first ? '启 航' : '返 回') + '</button></div>';
     openModal(html);
     $('btnStart').addEventListener('click', function () {
@@ -1151,15 +1245,22 @@
   /* ================= 按钮 ================= */
   $('btnTide').addEventListener('click', beginBattle);
   $('btnSpeed').addEventListener('click', function () {
-    S.speed = S.speed === 1 ? 2 : 1;
+    S.speed = S.speed === 1 ? 2 : (S.speed === 2 ? 4 : 1);
     syncUI();
   });
   $('btnDive').addEventListener('click', function () {
     if (S.phase !== 'build' || S.run.dived) return;
-    S.run.dived = true;
-    S.run.wood += 25;
-    S.run.extraDivers += 2;
-    toast('下潜打捞：+25 木材，但下一次涨潮会多来 2 只深潜者');
+    var err = C.dive(S.run);
+    if (err) { toast(err); return; }
+    toast('下潜打捞：+25 木材，但这一波会多来 2 只深潜者');
+    syncUI();
+  });
+  $('btnFast').addEventListener('click', function () {
+    if (S.phase !== 'battle' || !S.battle || S.battle.result) return;
+    var guard = 0;
+    while (!S.battle.result && guard++ < 60 * 200) C.step(S.battle, 1 / 60);
+    S.phase = 'ending';
+    S.endTimer = 0.45;
     syncUI();
   });
   $('btnHelp').addEventListener('click', function () { showHelp(false); });
@@ -1220,7 +1321,8 @@
     closeModal();
     /* 调试：预置一套甲板，便于截图检查 */
     if (location.search.indexOf('demo') >= 0) {
-      var demo = [[1,1,'ballista'],[2,1,'ballista'],[3,1,'gen'],[0,0,'flak'],[4,0,'flak'],[1,2,'harpoon'],[2,2,'harpoon'],[4,2,'gen']];
+      S.run.unlocked = [1, 2, 3, 4];
+      var demo = [[1,1,'ballista'],[2,1,'ballista'],[3,1,'ballista'],[4,1,'gen'],[1,2,'harpoon'],[2,2,'armor'],[3,0,'flak'],[4,0,'flak']];
       demo.forEach(function (d) { S.run.grid[C.idx(d[0], d[1])] = d[2]; });
       var mw = location.search.match(/wave=([0-9]+)/);
       if (mw) S.run.wave = parseInt(mw[1], 10);
