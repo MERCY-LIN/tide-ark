@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    潮汐方舟  Tide Ark
    app.js —— 渲染 / 交互 / 流程
    ============================================================ */
@@ -23,9 +23,41 @@
     endTimer: 0,
     t: 0,
     route: null,
+    event: null,
     started: false,
     log: []
   };
+
+  /* ================= 局外存档 ================= */
+  var META_KEY = 'tideark.meta.v1';
+
+  function loadMeta() {
+    var def = { wreck: 0, runs: 0, wins: 0 };
+    try {
+      var raw = localStorage.getItem(META_KEY);
+      if (raw) {
+        var m = JSON.parse(raw) || {};
+        for (var k in m) if (m.hasOwnProperty(k)) def[k] = m[k];
+      }
+    } catch (e) { /* 无痕模式等，忽略即可 */ }
+    return def;
+  }
+
+  function saveMeta() {
+    try { localStorage.setItem(META_KEY, JSON.stringify(S.meta)); } catch (e) { /* 忽略 */ }
+  }
+
+  function metaLv(id) { return S.meta[id] || 0; }
+
+  /* 结束一局：结算残骸 */
+  function settleRun(won) {
+    var gain = C.wreckageOf(S.run, won);
+    S.meta.wreck = (S.meta.wreck || 0) + gain;
+    S.meta.runs = (S.meta.runs || 0) + 1;
+    if (won) S.meta.wins = (S.meta.wins || 0) + 1;
+    saveMeta();
+    return gain;
+  }
 
   /* ================= 工具 ================= */
   function $(id) { return document.getElementById(id); }
@@ -911,11 +943,22 @@
         ? '<div style="color:#f2e06b">遗物：' + rl.map(function (k) { return D.RELICS[k].name; }).join(' · ') + '</div>'
         : '';
       var shipName = D.SHIPS[S.run.ship] ? D.SHIPS[S.run.ship].name : '';
+      var stx = C.computeStats(S.run);
+      var tagParts = [];
+      D.TAG_ORDER.forEach(function (k) {
+        var n = stx.tags[k] || 0;
+        if (!n) return;
+        var t = D.TAGS[k];
+        var on = n >= t.t2;
+        tagParts.push('<span style="color:' + (on ? t.color : '#4a6a7a') + '">' +
+          t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
+      });
       el.innerHTML =
         '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b>' +
         '<span style="color:#5f8ea4"> 《' + shipName + '》</span></div>' +
         '<div class="k">来袭：' + pv.text + '</div>' +
-        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine;
+        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
+        (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '');
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -1090,7 +1133,7 @@
     return r.type;
   }
 
-  var TONE = { safe: '#86e0b0', mid: '#7fc8e8', risk: '#ffcf8a', elite: '#ff8b6b' };
+  var TONE = { safe: '#86e0b0', mid: '#7fc8e8', risk: '#ffcf8a', elite: '#ff8b6b', event: '#b48ce0' };
 
   function routeCardHTML(opt, i) {
     var tone = TONE[opt.tone] || '#9dc4d6';
@@ -1155,6 +1198,22 @@
           ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
           ictx.stroke();
         }
+      } else if (key === 'ship') {
+        ictx.strokeStyle = '#9dc4d6';
+        ictx.lineWidth = 2.4;
+        ictx.beginPath();
+        ictx.moveTo(5, 27); ictx.lineTo(39, 27); ictx.lineTo(32, 37); ictx.lineTo(12, 37);
+        ictx.closePath(); ictx.stroke();
+        ictx.beginPath(); ictx.moveTo(22, 7); ictx.lineTo(22, 27); ictx.stroke();
+        ictx.beginPath(); ictx.moveTo(22, 9); ictx.lineTo(34, 23); ictx.lineTo(22, 23);
+        ictx.closePath(); ictx.stroke();
+      } else if (key === 'oil') {
+        ictx.fillStyle = '#b48ce0';
+        ictx.beginPath();
+        ictx.moveTo(22, 6);
+        ictx.bezierCurveTo(33, 20, 32, 34, 22, 36);
+        ictx.bezierCurveTo(12, 34, 11, 20, 22, 6);
+        ictx.closePath(); ictx.fill();
       } else if (key !== 'none') {
         var d = D.MODULES[key];
         if (d) drawIcon(ictx, d.icon, 22, 22, 14, d.color);
@@ -1166,15 +1225,56 @@
     if (!S.route) return;
     var opt = S.route.options[i];
     if (!opt) return;
-    var nextWave = (S.route.cleared || 0) + 1;
+    if (opt.event) { showEvent(opt.event); return; }
+    advanceTo(opt);
+  }
+
+  /* 统一推进到下一波：写波次、设难度、重生成敌人 */
+  function advanceTo(opt) {
+    var cleared = S.route ? S.route.cleared : S.run.wave;
     S.route = null;
+    S.event = null;
     closeModal();
-    S.run.wave = nextWave;
-    C.applyRoute(S.run, opt);
+    S.run.wave = cleared + 1;
+    C.applyRoute(S.run, {
+      hpMul: opt.hpMul || 1,
+      add: opt.add || 0,
+      reward: opt.reward || null
+    });
     C.planWave(S.run);
-    toast('迎战「' + opt.name + '」 · ' + rewardText(opt.reward));
     enterBuild();
   }
+
+  function showEvent(ev) {
+    var html = '<h2>' + ev.name + '</h2>' +
+      '<div class="sub">遭遇 · 第 ' + (S.route ? S.route.cleared + 1 : S.run.wave) + ' 次潮汐前</div>' +
+      '<p>' + ev.text + '</p>' +
+      '<div class="picks">' + ev.choices.map(function (c, i) {
+        return '<div class="pick" data-i="' + i + '">' +
+          '<span class="pt" style="color:#b48ce0;border-color:#b48ce0">选择</span>' +
+          '<canvas data-icon="' + (ev.icon || 'none') + '" width="44" height="44"></canvas>' +
+          '<div class="pn" style="color:#c9b6e8">' + c.label + '</div>' +
+          '<div class="pd">' + c.desc + '</div>' +
+          '</div>';
+      }).join('') + '</div>' +
+      '<p class="hintline">事件不消耗路线，选完直接进入下一次潮汐的建造。</p>';
+    openModal(html);
+    Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
+      el.addEventListener('click', function () { pickEventChoice(parseInt(el.dataset.i, 10)); });
+    });
+  }
+
+  function pickEventChoice(i) {
+    if (!S.event) return;
+    var ev = S.event;
+    var choice = ev.choices[i];
+    if (!choice) return;
+    S.event = null;
+    var res = C.applyEvent(S.run, choice);
+    toast(res.got.length ? res.got.join(' · ') : '什么也没发生');
+    advanceTo({ hpMul: res.hpMul, add: res.add, reward: null });
+  }
+
   function enterBuild() {
     S.phase = 'build';
     S.sel = null;
@@ -1205,24 +1305,29 @@
     });
     var hasLeak = worstVal > 1;
     var share = Math.round((worstVal / totalLeak) * 100);
+    var gain = settleRun(false);
 
     var html = '<h2 style="color:#ff9c86">木筏沉没</h2>' +
       '<div class="sub">第 ' + S.run.wave + ' / ' + D.MAX_WAVE + ' 次潮汐 · ' + runSummary() + '</div>' +
       '<div class="infogrid">' +
       '<div class="k">本波击杀</div><div class="v">' + b.killed + '</div>' +
       '<div class="k">总输出</div><div class="v">' + Math.round(b.dmgDealt) + '</div>' +
+      '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
       (hasLeak ? '<div class="k">主要失血</div><div class="v bad">' + laneName[worst] + ' · ' + share + '%</div>' : '') +
       (hasLeak ? '<div class="k">诊断</div><div class="v">' +
         (worst === 'surface' ? '对海火力不足或射程没有覆盖到来袭方向'
           : worst === 'air' ? '高空甲板缺少高射炮，潮蝠直接撞上来了'
             : '水下舱缺少鱼叉/深水炸弹，深潜者一路啃到船底') + '</div>' : '') +
       '</div>' +
-      '<div class="modal-actions"><button class="btn primary" id="btnRetry">再来一次</button></div>';
+      '<div class="modal-actions"><button class="btn" id="btnDock2">船坞</button>' +
+      '<button class="btn primary" id="btnRetry">再来一次</button></div>';
     openModal(html);
     $('btnRetry').addEventListener('click', function () { showShipSelect(); });
+    $('btnDock2').addEventListener('click', function () { showDock(); });
   }
 
   function showVictory() {
+    var gain = settleRun(true);
     var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
       '<div class="sub">你带着这条船活过了 8 次潮汐 · ' + runSummary() + '</div>' +
       '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
@@ -1230,10 +1335,55 @@
       '<div class="infogrid">' +
       '<div class="k">总击杀</div><div class="v">' + S.run.kills + '</div>' +
       '<div class="k">剩余耐久</div><div class="v ok">' + Math.round(S.run.hp) + '</div>' +
+      '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
       '</div>' +
-      '<div class="modal-actions"><button class="btn primary" id="btnAgain">再漂一次</button></div>';
+      '<div class="modal-actions"><button class="btn" id="btnDock3">船坞</button>' +
+      '<button class="btn primary" id="btnAgain">再漂一次</button></div>';
     openModal(html);
     $('btnAgain').addEventListener('click', function () { showShipSelect(); });
+    $('btnDock3').addEventListener('click', function () { showDock(); });
+  }
+
+  /* ---------- 船坞：用残骸永久解锁 ---------- */
+  function showDock() {
+    var html = '<h2>船坞</h2>' +
+      '<div class="sub">残骸 ' + (S.meta.wreck || 0) + ' · 出航 ' + (S.meta.runs || 0) +
+      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次</div>' +
+      '<p>每次沉船都会留下残骸。<span class="hl">残骸不会消失</span>，拿它永久改装你的船队。</p>' +
+      '<div class="metalist">' +
+      D.META.map(function (u) {
+        var lv = metaLv(u.id);
+        var maxed = lv >= u.max;
+        var afford = (S.meta.wreck || 0) >= u.cost;
+        return '<div class="meta-row' + (maxed ? ' maxed' : '') + (afford && !maxed ? ' can' : '') +
+          '" data-meta="' + u.id + '">' +
+          '<div class="mn">' + u.name +
+          '<span class="lv">' + (u.max > 1 ? lv + ' / ' + u.max : (maxed ? '已解锁' : '未解锁')) + '</span></div>' +
+          '<div class="md">' + u.desc + '</div>' +
+          '<div class="mc">' + (maxed ? '—' : u.cost + ' 残骸') + '</div>' +
+          '</div>';
+      }).join('') +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn primary" id="btnSail">出 航</button></div>';
+    openModal(html);
+
+    Array.prototype.forEach.call(document.querySelectorAll('.meta-row'), function (el) {
+      el.addEventListener('click', function () {
+        var id = el.dataset.meta;
+        var u = null;
+        D.META.forEach(function (x) { if (x.id === id) u = x; });
+        if (!u) return;
+        var lv = metaLv(id);
+        if (lv >= u.max) { toast('已经改装到顶了'); return; }
+        if ((S.meta.wreck || 0) < u.cost) { toast('残骸不够（需要 ' + u.cost + '）'); return; }
+        S.meta.wreck -= u.cost;
+        S.meta[id] = lv + 1;
+        saveMeta();
+        toast('改装完成：' + u.name);
+        showDock();
+      });
+    });
+    $('btnSail').addEventListener('click', function () { showShipSelect(); });
   }
 
   function showHelp(first) {
@@ -1249,6 +1399,9 @@
       '<div class="k">潮汐词条</div><div class="v">每波可能带一个词条（<b>浓雾/蜂群/血月</b>…），会直接改这波的打法</div>' +
       '<div class="k">路线</div><div class="v">每波结束<b>二选一/三选一</b>：难度是明牌，奖励也是明牌，但不能都要</div>' +
       '<div class="k">遗物</div><div class="v">精英潮掉落，<b>整局改变规则</b>（探照灯 / 潮汐之子 / 扩建图纸…）</div>' +
+      '<div class="k">羁绊</div><div class="v">模块带标签：<b>炮击 / 燃烧 / 机械</b>，同一标签凑到 2 个、4 个触发质变</div>' +
+      '<div class="k">事件</div><div class="v">路线里会撞上<a style="color:#b48ce0">遭遇</a>，每个选择都有代价</div>' +
+      '<div class="k">残骸</div><div class="v">沉船也有收获，<b>永久</b>改装船队（解锁母舰 / 起始补给 / 祖传遗物）</div>' +
       '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
       '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
@@ -1262,21 +1415,31 @@
 
   function showShipSelect() {
     var html = '<h2>选择你的船</h2>' +
-      '<div class="sub">这一局的起点不一样，能走的路也不一样</div>' +
+      '<div class="sub">残骸 ' + (S.meta.wreck || 0) + ' · 出航 ' + (S.meta.runs || 0) +
+      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次</div>' +
       '<div class="picks">' + D.SHIP_ORDER.map(function (id) {
         var sp = D.SHIPS[id];
-        return '<div class="pick" data-ship="' + id + '">' +
-          '<span class="pt">起点</span>' +
+        var locked = id === 'carrier' && !metaLv('carrier');
+        return '<div class="pick' + (locked ? ' locked' : '') + '" data-ship="' + id + '">' +
+          (locked
+            ? '<span class="pt" style="color:#8b7f6a;border-color:#8b7f6a">未解锁</span>'
+            : '<span class="pt">起点</span>') +
           '<canvas width="44" height="44"></canvas>' +
-          '<div class="pn" style="color:' + sp.color + '">' + sp.name + '</div>' +
-          '<div class="pd">' + sp.desc +
+          '<div class="pn" style="color:' + (locked ? '#6b6b6b' : sp.color) + '">' + sp.name + '</div>' +
+          '<div class="pd">' + (locked ? '在船坞花 120 残骸解锁' : sp.desc) +
           '<br><span style="color:#5f8ea4">甲板 ' + sp.cols.length + ' 列 · 木材 ' + sp.wood + ' · 耐久 ' + sp.hp + '</span></div>' +
           '</div>';
-      }).join('') + '</div>';
+      }).join('') + '</div>' +
+      '<div class="modal-actions"><button class="btn" id="btnDock">船坞</button></div>';
     openModal(html);
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
-      el.addEventListener('click', function () { newGame(el.dataset.ship); });
+      el.addEventListener('click', function () {
+        var id = el.dataset.ship;
+        if (id === 'carrier' && !metaLv('carrier')) { showDock(); return; }
+        newGame(id);
+      });
     });
+    $('btnDock').addEventListener('click', function () { showDock(); });
     Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
       var ictx = cnv.getContext('2d');
       ictx.strokeStyle = '#9dc4d6';
@@ -1291,12 +1454,17 @@
   }
 
   function newGame(shipId) {
-    S.run = C.newRun(undefined, shipId || 'barge');
+    S.run = C.newRun(undefined, shipId || 'barge', {
+      wood: metaLv('wood'),
+      hp: metaLv('hp'),
+      relic: metaLv('relic') > 0
+    });
     S.battle = null;
     S.phase = 'build';
     S.sel = null;
     S.started = true;
     S.route = null;
+    S.event = null;
     closeModal();
     syncUI();
   }
@@ -1376,6 +1544,7 @@
   }
 
   /* ================= 启动 ================= */
+  S.meta = loadMeta();
   buildPalette();
   syncUI();
   if (location.search.indexOf('nointro') >= 0) {
@@ -1404,6 +1573,8 @@
       if (location.search.indexOf('select') >= 0) showShipSelect();
       if (location.search.indexOf('over=1') >= 0) { S.phase = 'gameover'; showGameOver(); }
       if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
+      if (location.search.indexOf('dock=1') >= 0) showDock();
+      if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
       var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
       if (mShip) newGame(mShip[1]);
     }

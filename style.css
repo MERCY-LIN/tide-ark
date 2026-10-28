@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark  —— 样式
    ============================================================ */
 * { box-sizing: border-box; }
@@ -185,7 +185,6 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   display: flex; align-items: center; justify-content: center;
   background: rgba(3, 8, 12, .78);
   backdrop-filter: blur(4px);
-  animation: fade .18s ease;
 }
 #modal.hidden { display: none; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
@@ -198,7 +197,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   background: linear-gradient(#0f1e2a, #0a151d);
   border: 1px solid #224355;
   box-shadow: 0 30px 90px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .04);
-  animation: pop .22s cubic-bezier(.2, 1.3, .5, 1);
+
 }
 @keyframes pop { from { transform: translateY(14px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -268,3 +267,29 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 .hintline {
   color: #4f7d92; font-size: 12px; letter-spacing: .5px; margin-top: 10px;
 }
+
+/* ---------------- 船坞 / 局外改装 ---------------- */
+.pick.locked { opacity: .6; }
+.pick.locked:hover { transform: none; border-color: #234454; box-shadow: none; }
+
+.metalist { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 4px; }
+.meta-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "n c" "d d";
+  gap: 3px 14px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  background: #0e1c25;
+  border: 1px solid #234454;
+  cursor: pointer;
+  transition: .15s;
+}
+.meta-row:hover { border-color: #3a6a86; background: #13242f; }
+.meta-row.maxed { opacity: .45; cursor: default; }
+.meta-row.maxed:hover { border-color: #234454; background: #0e1c25; }
+.meta-row.can .mc { color: #86e0b0; }
+.meta-row .mn { grid-area: n; font-size: 14px; color: #dbeef8; letter-spacing: .5px; }
+.meta-row .lv { font-size: 11px; color: #5f8ea4; margin-left: 8px; }
+.meta-row .md { grid-area: d; font-size: 12px; color: #7fa9bd; line-height: 1.5; }
+.meta-row .mc { grid-area: c; font-size: 13px; color: #e8c07a; align-self: center; font-variant-numeric: tabular-nums; }

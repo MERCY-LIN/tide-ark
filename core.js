@@ -16,7 +16,10 @@
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed, shipId) {
+  function newRun(seed, shipId, meta) {
+    meta = meta || {};
+    var bonusWood = 15 * (meta.wood || 0);
+    var bonusHp = 25 * (meta.hp || 0);
     var stock = {};
     D.ORDER.forEach(function (id) { stock[id] = 0; });
     var up = {};
@@ -27,9 +30,9 @@
       seed: seed || (Math.random() * 1e9) | 0,
       ship: shipId || 'barge',
       wave: 1,
-      wood: ship.wood,
-      hp: ship.hp,
-      baseHp: ship.hp,
+      wood: ship.wood + bonusWood,
+      hp: ship.hp + bonusHp,
+      baseHp: ship.hp + bonusHp,
       grid: new Array(COLS * ROWS).fill(null),
       unlocked: ship.cols.slice(),
       relics: [],
@@ -45,6 +48,7 @@
       plan: null
     };
     run.rng = D.mulberry32(run.seed);
+    if (meta.relic) grantRelic(run);
     if (ship.perk === 'stock') {
       for (var i = 0; i < 2; i++) {
         var mid = D.ORDER[Math.floor(Math.random() * D.ORDER.length)];
@@ -97,6 +101,8 @@
     var e = expandDef(col);
     if (!e) return 0;
     var mul = (run.relics || []).indexOf('blueprint') >= 0 ? 0.6 : 1;
+    var st = computeStats(run);
+    mul *= (st.expandMul || 1);
     return Math.round(e.cost * mul);
   }
 
@@ -150,7 +156,11 @@
       laneDmg: { surface: 1, air: 1 + 0.35 * (up.aa || 0), under: 1 + 0.35 * (up.asw || 0), any: 1 },
       repairPerWave: 10 * (up.patch || 0),
       magEach: 0.25,
-      magCap: 0.5
+      magCap: 0.5,
+      boostMul: 1.2,
+      aoeMul: 1,
+      fireBurst: 0,
+      expandMul: 1
     };
     var cells = cellsOf(run);
 
@@ -171,7 +181,20 @@
     if (has('bilge')) st.tideMul *= 0.85;
     if (has('spares')) st.repairPerWave += 15;
     if (has('twin')) { st.magEach = 0.5; st.magCap = 0.75; }
-    if (has('blueprint')) st.expandMul = 0.6;
+
+    /* --- 羁绊：按标签计数 --- */
+    var tagCount = { gun: 0, fire: 0, mech: 0 };
+    cells.forEach(function (x) {
+      var t = D.TAG_OF[x.id];
+      if (t) tagCount[t]++;
+    });
+    st.tags = tagCount;
+    if (tagCount.gun >= 4) { st.dmgMul *= 1.20; st.rangeBonus += 1; }
+    else if (tagCount.gun >= 2) { st.dmgMul *= 1.08; }
+    st.aoeMul = tagCount.fire >= 2 ? 1.3 : 1;
+    st.fireBurst = tagCount.fire >= 4 ? 18 : 0;
+    st.boostMul = tagCount.mech >= 2 ? 1.4 : 1.2;
+    if (tagCount.mech >= 4) { st.salvage += 20; st.expandMul = (st.expandMul || 1) * 0.75; }
 
     cells.forEach(function (x) {
       var e = x.def.effect;
@@ -375,7 +398,7 @@
     if (b.log.length > 40) b.log.shift();
   }
 
-  function hurt(b, e, amount, color) {
+  function hurt(b, e, amount, color, noBurst) {
     if (e.dead) return;
     e.hp -= amount;
     e.hit = 0.14;
@@ -386,6 +409,18 @@
       burst(b, e.x, e.y, e.def.color, e.def.boss ? 26 : 8, e.def.boss ? 160 : 110);
       if (e.def.boss) pushLog(b, '潮汐巨兽倒下了');
       else floatText(b, e.x, e.y - 14, '✦', color || '#ffd479', 15);
+
+      /* 燃烧羁绊：击杀时炸开 */
+      if (b.st.fireBurst && !noBurst && !e._burst) {
+        e._burst = true;
+        b.blasts.push({ x: e.x, y: e.y, r: 90, life: 0.26, max: 0.26, color: '#e2703a' });
+        for (var i = 0; i < b.enemies.length; i++) {
+          var o = b.enemies[i];
+          if (o === e || o.dead) continue;
+          var dx = o.x - e.x, dy = o.y - e.y;
+          if (dx * dx + dy * dy <= 90 * 90) hurt(b, o, b.st.fireBurst, '#e2703a', true);
+        }
+      }
     }
   }
 
@@ -415,9 +450,10 @@
         e = b.enemies[i];
         if (e.dead) continue;
         var dx = e.x - target.x, dy = e.y - target.y;
-        if (dx * dx + dy * dy <= m.def.radius * m.def.radius) hits.push(e);
+        var rr2 = m.def.radius * (b.st.aoeMul || 1);
+        if (dx * dx + dy * dy <= rr2 * rr2) hits.push(e);
       }
-      b.blasts.push({ x: target.x, y: target.y, r: m.def.radius, life: 0.3, max: 0.3, color: m.def.color });
+      b.blasts.push({ x: target.x, y: target.y, r: m.def.radius * (b.st.aoeMul || 1), life: 0.3, max: 0.3, color: m.def.color });
     } else if (m.def.chain) {
       var pool = [];
       for (i = 0; i < b.enemies.length; i++) {
@@ -525,7 +561,7 @@
       var target = acquire(b, m);
       if (!target) continue;
       var rate = b.st.rateMul;
-      if (m.boosted) rate *= 0.833;
+      if (m.boosted) rate *= 1 / (b.st.boostMul || 1.2);
       if (m.flooded) rate *= 1.25;
       m.cd = m.def.cd * rate;
       fire(b, m, target);
@@ -646,6 +682,59 @@
     return run.pending;
   }
 
+  function grantRelic(run) {
+    var pool = D.RELIC_ORDER.filter(function (k) { return (run.relics || []).indexOf(k) < 0; });
+    if (!pool.length) { run.wood += 40; return null; }
+    var id = pool[Math.floor(Math.random() * pool.length)];
+    run.relics.push(id);
+    return id;
+  }
+
+  /* 事件选项结算：返回下一波的难度修正 */
+  function applyEvent(run, choice) {
+    var eff = choice.eff || {};
+    var lost = false;
+    if (eff.gamble) {
+      lost = Math.random() >= eff.gamble;
+      eff = lost ? eff.lose : eff.win;
+    }
+    var got = [];
+    if (eff.wood) {
+      run.wood += eff.wood;
+      got.push('木材 ' + (eff.wood > 0 ? '+' : '') + eff.wood);
+    }
+    if (eff.hp) {
+      var maxHp = computeStats(run).maxHp;
+      run.hp = Math.max(1, Math.min(maxHp, run.hp + eff.hp));
+      got.push('耐久 ' + (eff.hp > 0 ? '+' : '') + eff.hp);
+    }
+    if (eff.relic) {
+      var rid = grantRelic(run);
+      got.push(rid ? '遗物「' + D.RELICS[rid].name + '」' : '遗物已满，折算 40 木材');
+    }
+    if (eff.module) {
+      var mid = D.ORDER[Math.floor(Math.random() * D.ORDER.length)];
+      run.stock[mid] = (run.stock[mid] || 0) + 1;
+      got.push('模块「' + D.MODULES[mid].name + '」');
+    }
+    if (eff.upgrade) {
+      var ups = availableUpgrades(run);
+      if (ups.length) {
+        var uid = ups[Math.floor(Math.random() * ups.length)];
+        run.up[uid] = (run.up[uid] || 0) + 1;
+        got.push('改造「' + D.UPGRADES[uid].name + '」');
+      } else {
+        run.wood += 30;
+        got.push('改造已满，折算 30 木材');
+      }
+    }
+    return { hpMul: eff.modHp || 1, add: eff.modAdd || 0, got: got, lost: lost };
+  }
+
+  function wreckageOf(run, won) {
+    return Math.round((run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0));
+  }
+
   root.Core = {
     idx: idx, mx: mx, my: my,
     newRun: newRun, planWave: planWave,
@@ -657,6 +746,7 @@
     rewardWood: rewardWood, afterWave: afterWave,
     availableUpgrades: availableUpgrades, expandCost: expandCost, applyRoute: applyRoute,
     rollCards: rollCards, applyCard: applyCard,
+    grantRelic: grantRelic, applyEvent: applyEvent, wreckageOf: wreckageOf,
     edgeX: edgeX
   };
 })(typeof window !== 'undefined' ? window : globalThis);

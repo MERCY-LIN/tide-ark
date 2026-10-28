@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark  v0.2
    data.js —— 纯数值与内容表（无 DOM 依赖）
    ============================================================ */
@@ -93,6 +93,32 @@
 
   var ORDER = ['ballista', 'flamer', 'tesla', 'gen', 'mag', 'flak', 'salvage', 'harpoon', 'depth', 'armor', 'pump'];
 
+  /* ---------- 羁绊：模块带标签，凑够数量触发质变 ---------- */
+  var TAG_OF = {
+    ballista: 'gun', flak: 'gun', harpoon: 'gun',
+    flamer: 'fire', depth: 'fire', tesla: 'fire',
+    gen: 'mech', mag: 'mech', armor: 'mech', pump: 'mech', salvage: 'mech'
+  };
+
+  var TAGS = {
+    gun: {
+      name: '炮击', color: '#e0a458', t2: 2, t4: 4,
+      d2: '所有武器伤害 +8%',
+      d4: '伤害提升到 +20%，所有武器射程 +1 列'
+    },
+    fire: {
+      name: '燃烧', color: '#e2703a', t2: 2, t4: 4,
+      d2: '范围伤害半径 +30%',
+      d4: '击杀时对周围 90px 造成 18 伤害'
+    },
+    mech: {
+      name: '机械', color: '#8fd14f', t2: 2, t4: 4,
+      d2: '发电机加成 20% → 40%',
+      d4: '另外：每波结束 +20 木材，加固费用 -25%'
+    }
+  };
+  var TAG_ORDER = ['gun', 'fire', 'mech'];
+
   /* ---------- 全局改造（打捞三选一里的被动） ---------- */
   var UPGRADES = {
     barrel: { name: '加长炮管', desc: '所有武器射程 +1 列', max: 3 },
@@ -143,6 +169,67 @@
     blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' }
   };
   var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint'];
+
+  /* ---------- 事件：路线里的一次故事 ----------
+     eff 支持：wood / hp / relic / module / upgrade / modHp（下一波难度） */
+  var EVENTS = [
+    {
+      id: 'hulk', name: '漏水的货轮', icon: 'ship',
+      text: '一艘半沉的货轮横在航线上。舱门后面还有动静，货舱里也有东西。',
+      choices: [
+        { label: '拆了它', desc: '+45 木材', eff: { wood: 45 } },
+        { label: '救人', desc: '-15 耐久，获得 1 件遗物', eff: { hp: -15, relic: 1 } }
+      ]
+    },
+    {
+      id: 'ghost', name: '幽灵船', icon: 'ship',
+      text: '一条没有灯火的船在雾里漂着，甲板上的东西看上去还能用。',
+      choices: [
+        { label: '登船', desc: '55% 拿到遗物 / 45% 掉 25 耐久', eff: { gamble: 0.55, win: { relic: 1 }, lose: { hp: -25 } } },
+        { label: '绕开', desc: '+15 木材', eff: { wood: 15 } }
+      ]
+    },
+    {
+      id: 'oil', name: '油污海域', icon: 'oil',
+      text: '前方海面浮着一层油。点着了能烧掉一批东西，也会把它们都引过来。',
+      choices: [
+        { label: '点火', desc: '下一波敌人生命 -25%，但多 1 个单位', eff: { modHp: 0.75, modAdd: 1 } },
+        { label: '绕开', desc: '无事发生', eff: {} }
+      ]
+    },
+    {
+      id: 'port', name: '港口废墟', icon: 'ship',
+      text: '一座被淹了一半的港口。船坞还能用，仓库也还没被搬空。',
+      choices: [
+        { label: '进坞修补', desc: '+55 耐久', eff: { hp: 55 } },
+        { label: '搜刮仓库', desc: '+50 木材，-20 耐久', eff: { wood: 50, hp: -20 } }
+      ]
+    },
+    {
+      id: 'beacon', name: '深海信标', icon: 'oil',
+      text: '海底有个还在闪的信标，下面挂着一整箱没开封的货。',
+      choices: [
+        { label: '打捞上来', desc: '+1 随机模块 +1 随机改造', eff: { module: 1, upgrade: 1 } },
+        { label: '不管它', desc: '+10 木材', eff: { wood: 10 } }
+      ]
+    },
+    {
+      id: 'altar', name: '潮汐祭坛', icon: 'oil',
+      text: '礁石上立着一座祭坛，凹槽的形状刚好能放进一块船板。',
+      choices: [
+        { label: '献祭船板', desc: '-35 耐久，获得 1 件遗物', eff: { hp: -35, relic: 1 } },
+        { label: '搬走供品', desc: '+25 木材, +1 随机改造', eff: { wood: 25, upgrade: 1 } }
+      ]
+    }
+  ];
+
+  /* ---------- 局外成长：用残骸永久解锁 ---------- */
+  var META = [
+    { id: 'carrier', name: '解锁母舰', cost: 120, max: 1, desc: '开局可选「母舰」' },
+    { id: 'wood', name: '补给舱', cost: 80, max: 3, desc: '每局起始木材 +15' },
+    { id: 'hp', name: '加固船体', cost: 80, max: 3, desc: '每局起始耐久 +25' },
+    { id: 'relic', name: '祖传遗物', cost: 220, max: 1, desc: '每局开局随机带 1 件遗物' }
+  ];
 
   /* ---------- 敌人 ---------- */
   var ENEMIES = {
@@ -198,7 +285,7 @@
       list.push({ kind: 'boss', side: rng() < 0.5 ? 'L' : 'R' });
       budget = 7;
     } else {
-      budget = 4.4 * Math.pow(1.235, wave - 1);
+      budget = 4.4 * Math.pow(1.315, wave - 1);
     }
 
     var guard = 0;
@@ -253,7 +340,7 @@
       spawns: list,
       sides: Object.keys(sides).sort(),
       mod: mod,
-      hpMul: (isBoss ? 1.25 : 1 + (wave - 1) * 0.06) * (mod && mod.hp ? mod.hp : 1),
+      hpMul: (isBoss ? 1.45 : 1 + (wave - 1) * 0.10) * (mod && mod.hp ? mod.hp : 1),
       spdMul: mod && mod.spd ? mod.spd : 1,
       dmgMul: mod && mod.dmg ? mod.dmg : 1,
       rangeMul: mod && mod.range ? mod.range : 1
@@ -309,6 +396,16 @@
     var opts = [calm];
     opts.push(rng() < 0.55 ? assault : normal);
     if (run.wave >= 2 && relicPool.length) opts.push(elite);
+
+    /* 有时会撞上一次事件，而不是一场硬仗 */
+    if (rng() < 0.5) {
+      var ev = EVENTS[Math.floor(rng() * EVENTS.length)];
+      if (opts.length >= 3) opts.pop();
+      opts.splice(1, 0, {
+        id: 'event', name: ev.name, tag: '事件', tone: 'event',
+        hpMul: 1, add: 0, desc: '未知的遭遇', event: ev
+      });
+    }
     return opts;
   }
 
@@ -338,6 +435,8 @@
     UPGRADES: UPGRADES, UPGRADE_ORDER: UPGRADE_ORDER,
     SHIPS: SHIPS, SHIP_ORDER: SHIP_ORDER,
     RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
+    TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
+    EVENTS: EVENTS, META: META,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };
