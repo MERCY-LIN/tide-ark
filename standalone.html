@@ -618,13 +618,26 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9', pts: 1.9 },
     shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a', pts: 2.8 },
     raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a', pts: 3.4 },
-    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 },
+    boss: {
+      name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99,
+      hint: '半血后会狂暴并召来援军',
+      phases: [
+        { at: 0.5, spd: 1.45, dmg: 1.3, summon: ['drifter'], text: '潮汐巨兽撕开了船壳' }
+      ]
+    },
 
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
     crab: { name: '深渊钳虫', lane: 'surface', hp: 220, spd: 30, dmg: 18, r: 27, color: '#b06a4a', pts: 4.2 },
-    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 50, color: '#c85fd0', boss: true, pts: 99 }
+    eye: {
+      name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 50, color: '#c85fd0', boss: true, pts: 99,
+      hint: '会在水面与水下之间切换',
+      phases: [
+        { at: 0.7, lane: 'under', spd: 1.9, text: '潮汐之眼沉入水下' },
+        { at: 0.35, lane: 'surface', spd: 1.5, dmg: 1.5, summon: ['bat', 'bat', 'eel'], text: '潮汐之眼浮出水面 —— 它在拼命' }
+      ]
+    }
   };
 
   /* ---------- 模块改装：挂到单台武器上的词条 ---------- */
@@ -861,10 +874,16 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     Object.keys(count).forEach(function (k) {
       parts.push(ENEMIES[k].name + '×' + count[k]);
     });
+    var hint = null;
+    plan.spawns.forEach(function (sp) {
+      var d = ENEMIES[sp.kind];
+      if (d && d.hint) hint = d.name + '：' + d.hint;
+    });
     return {
       sides: plan.sides.map(function (s) { return s === 'L' ? '左舷' : '右舷'; }).join(' + '),
       text: parts.join(' · '),
-      mod: plan.mod
+      mod: plan.mod,
+      hint: hint
     };
   }
 
@@ -1331,6 +1350,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       latched: false,
       enraged: false,
       burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+      phase: 0, spdMul: 1, dmgMul: 1,
       bob: Math.random() * 6.283,
       hit: 0,
       dead: false,
@@ -1495,6 +1515,41 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     m.flash = 0.1;
   }
 
+  /* Boss 阶段：血量跨过阈值时换招式 */
+  function checkPhase(b, e) {
+    var phases = e.def.phases;
+    if (!phases) return;
+    var frac = e.hp / e.maxHp;
+    while (e.phase < phases.length && frac <= phases[e.phase].at) {
+      var ph = phases[e.phase];
+      e.phase++;
+      if (ph.spd) e.spdMul *= ph.spd;
+      if (ph.dmg) e.dmgMul *= ph.dmg;
+      if (ph.lane && ph.lane !== e.lane) {
+        e.lane = ph.lane;
+        e.y = laneY(b, ph.lane);
+      }
+      if (ph.summon) {
+        ph.summon.forEach(function (kind, si) {
+          var def = D.ENEMIES[kind];
+          var hp2 = def.hp * b.plan.hpMul;
+          b.enemies.push({
+            id: b.seq++, kind: kind, def: def, lane: def.lane, side: e.side,
+            x: e.x + (si - 1) * 46, y: laneY(b, def.lane),
+            hp: hp2, maxHp: hp2, r: def.r,
+            latched: false, enraged: false, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+            phase: 0, spdMul: 1, dmgMul: 1,
+            bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+          });
+        });
+      }
+      pushLog(b, '【' + e.def.name + '】' + ph.text);
+      floatText(b, e.x, e.y - e.r - 26, ph.text, '#ff8b6b', 17);
+      burst(b, e.x, e.y, e.def.color, 26, 150);
+      b.shake = Math.min(12, b.shake + 6);
+    }
+  }
+
   function step(b, dt) {
     if (b.result) return;
     dt = clamp(dt, 0, 0.05);
@@ -1538,6 +1593,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (e.dead) continue;
       if (e.lane === 'surface') e.y = b.waterY - 10;
       if (e.hit > 0) e.hit -= dt;
+      checkPhase(b, e);
       if (e.burnT > 0) {
         e.burnT -= dt;
         hurt(b, e, e.burnDps * dt, '#e2703a', true);
@@ -1546,7 +1602,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (e.slowT > 0) e.slowT -= dt;
 
       if (!e.latched) {
-        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1);
+        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
         if (e.side === 'L') {
           e.x += spd * dt;
           if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
@@ -1563,7 +1619,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
           e.biteCd = 0.55;
           e.hit = 0.12;
         }
-        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * dt;
+        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt;
         b.hp -= bite;
         b.leak += bite;
         b.leakByLane[e.lane] += bite;
@@ -2576,6 +2632,51 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     }
   }
 
+  /* Boss 血条：带阶段刻度 */
+  function drawBossBar(b) {
+    var boss = null;
+    for (var i = 0; i < b.enemies.length; i++) {
+      if (b.enemies[i].def.boss && !b.enemies[i].dead) { boss = b.enemies[i]; break; }
+    }
+    if (!boss) return;
+
+    var barW = 520, barH = 13;
+    var x = (W - barW) / 2, y = H - 52;
+    var frac = Math.max(0, boss.hp / boss.maxHp);
+
+    g.save();
+    g.fillStyle = 'rgba(4,10,16,.78)';
+    rr(g, x - 10, y - 26, barW + 20, 52, 10);
+    g.fill();
+
+    g.fillStyle = '#0a1721';
+    rr(g, x, y, barW, barH, 6);
+    g.fill();
+
+    var grd = g.createLinearGradient(x, 0, x + barW, 0);
+    grd.addColorStop(0, boss.def.color);
+    grd.addColorStop(1, '#c85fd0');
+    g.fillStyle = grd;
+    if (frac > 0.001) { rr(g, x, y, Math.max(6, barW * frac), barH, 6); g.fill(); }
+
+    (boss.def.phases || []).forEach(function (ph) {
+      var px = x + barW * ph.at;
+      g.strokeStyle = 'rgba(255,255,255,.6)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(px, y - 3);
+      g.lineTo(px, y + barH + 3);
+      g.stroke();
+    });
+
+    g.fillStyle = '#ffd9e4';
+    g.font = '700 13px "Microsoft YaHei", sans-serif';
+    g.textAlign = 'center';
+    g.fillText(boss.def.name + '   ' + Math.round(frac * 100) + '%', W / 2, y - 8);
+    g.restore();
+    g.textAlign = 'left';
+  }
+
   /* 两侧来袭箭头 */
   function drawSideArrows(p, t) {
     if (S.phase !== 'build') return;
@@ -2645,6 +2746,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     }
 
     drawWaterOverlay(waterY, b ? b.tide : 0, bob);
+    if (b) drawBossBar(b);
 
     g.restore();
 
@@ -2801,6 +2903,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         tagParts.push('<span style="color:' + (on ? t.color : '#4a6a7a') + '">' +
           t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
       });
+      var bossLine = pv.hint ? '<div class="warn">⚠ ' + pv.hint + '</div>' : '';
       var mutLine = S.run.mut
         ? '<div style="color:#b48ce0">异变 · ' + S.run.mut.name + '：' + S.run.mut.desc + '</div>'
         : '';
@@ -2813,7 +2916,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         '<div class="k">来袭：' + pv.text + '</div>' +
         '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
         (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '') +
-        ascLine + mutLine;
+        ascLine + bossLine + mutLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -3545,7 +3648,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       var demo = [[1,1,'ballista'],[2,1,'ballista'],[3,1,'ballista'],[4,1,'gen'],[1,2,'harpoon'],[2,2,'armor'],[3,0,'flak'],[4,0,'flak']];
       demo.forEach(function (d) { S.run.grid[C.idx(d[0], d[1])] = d[2]; });
       var mw = location.search.match(/wave=([0-9]+)/);
-      if (mw) S.run.wave = parseInt(mw[1], 10);
+      if (mw) { S.run.wave = parseInt(mw[1], 10); C.planWave(S.run); }
       if (location.search.indexOf('battle') >= 0) {
         S.battle = C.startBattle(S.run);
         S.phase = 'battle';

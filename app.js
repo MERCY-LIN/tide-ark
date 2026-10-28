@@ -789,6 +789,51 @@
     }
   }
 
+  /* Boss 血条：带阶段刻度 */
+  function drawBossBar(b) {
+    var boss = null;
+    for (var i = 0; i < b.enemies.length; i++) {
+      if (b.enemies[i].def.boss && !b.enemies[i].dead) { boss = b.enemies[i]; break; }
+    }
+    if (!boss) return;
+
+    var barW = 520, barH = 13;
+    var x = (W - barW) / 2, y = H - 52;
+    var frac = Math.max(0, boss.hp / boss.maxHp);
+
+    g.save();
+    g.fillStyle = 'rgba(4,10,16,.78)';
+    rr(g, x - 10, y - 26, barW + 20, 52, 10);
+    g.fill();
+
+    g.fillStyle = '#0a1721';
+    rr(g, x, y, barW, barH, 6);
+    g.fill();
+
+    var grd = g.createLinearGradient(x, 0, x + barW, 0);
+    grd.addColorStop(0, boss.def.color);
+    grd.addColorStop(1, '#c85fd0');
+    g.fillStyle = grd;
+    if (frac > 0.001) { rr(g, x, y, Math.max(6, barW * frac), barH, 6); g.fill(); }
+
+    (boss.def.phases || []).forEach(function (ph) {
+      var px = x + barW * ph.at;
+      g.strokeStyle = 'rgba(255,255,255,.6)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(px, y - 3);
+      g.lineTo(px, y + barH + 3);
+      g.stroke();
+    });
+
+    g.fillStyle = '#ffd9e4';
+    g.font = '700 13px "Microsoft YaHei", sans-serif';
+    g.textAlign = 'center';
+    g.fillText(boss.def.name + '   ' + Math.round(frac * 100) + '%', W / 2, y - 8);
+    g.restore();
+    g.textAlign = 'left';
+  }
+
   /* 两侧来袭箭头 */
   function drawSideArrows(p, t) {
     if (S.phase !== 'build') return;
@@ -858,6 +903,7 @@
     }
 
     drawWaterOverlay(waterY, b ? b.tide : 0, bob);
+    if (b) drawBossBar(b);
 
     g.restore();
 
@@ -1014,6 +1060,7 @@
         tagParts.push('<span style="color:' + (on ? t.color : '#4a6a7a') + '">' +
           t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
       });
+      var bossLine = pv.hint ? '<div class="warn">⚠ ' + pv.hint + '</div>' : '';
       var mutLine = S.run.mut
         ? '<div style="color:#b48ce0">异变 · ' + S.run.mut.name + '：' + S.run.mut.desc + '</div>'
         : '';
@@ -1026,7 +1073,7 @@
         '<div class="k">来袭：' + pv.text + '</div>' +
         '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
         (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '') +
-        ascLine + mutLine;
+        ascLine + bossLine + mutLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -1758,7 +1805,7 @@
       var demo = [[1,1,'ballista'],[2,1,'ballista'],[3,1,'ballista'],[4,1,'gen'],[1,2,'harpoon'],[2,2,'armor'],[3,0,'flak'],[4,0,'flak']];
       demo.forEach(function (d) { S.run.grid[C.idx(d[0], d[1])] = d[2]; });
       var mw = location.search.match(/wave=([0-9]+)/);
-      if (mw) S.run.wave = parseInt(mw[1], 10);
+      if (mw) { S.run.wave = parseInt(mw[1], 10); C.planWave(S.run); }
       if (location.search.indexOf('battle') >= 0) {
         S.battle = C.startBattle(S.run);
         S.phase = 'battle';

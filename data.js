@@ -242,13 +242,26 @@
     diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9', pts: 1.9 },
     shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a', pts: 2.8 },
     raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a', pts: 3.4 },
-    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 },
+    boss: {
+      name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99,
+      hint: '半血后会狂暴并召来援军',
+      phases: [
+        { at: 0.5, spd: 1.45, dmg: 1.3, summon: ['drifter'], text: '潮汐巨兽撕开了船壳' }
+      ]
+    },
 
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
     crab: { name: '深渊钳虫', lane: 'surface', hp: 220, spd: 30, dmg: 18, r: 27, color: '#b06a4a', pts: 4.2 },
-    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 50, color: '#c85fd0', boss: true, pts: 99 }
+    eye: {
+      name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 50, color: '#c85fd0', boss: true, pts: 99,
+      hint: '会在水面与水下之间切换',
+      phases: [
+        { at: 0.7, lane: 'under', spd: 1.9, text: '潮汐之眼沉入水下' },
+        { at: 0.35, lane: 'surface', spd: 1.5, dmg: 1.5, summon: ['bat', 'bat', 'eel'], text: '潮汐之眼浮出水面 —— 它在拼命' }
+      ]
+    }
   };
 
   /* ---------- 模块改装：挂到单台武器上的词条 ---------- */
@@ -485,10 +498,16 @@
     Object.keys(count).forEach(function (k) {
       parts.push(ENEMIES[k].name + '×' + count[k]);
     });
+    var hint = null;
+    plan.spawns.forEach(function (sp) {
+      var d = ENEMIES[sp.kind];
+      if (d && d.hint) hint = d.name + '：' + d.hint;
+    });
     return {
       sides: plan.sides.map(function (s) { return s === 'L' ? '左舷' : '右舷'; }).join(' + '),
       text: parts.join(' · '),
-      mod: plan.mod
+      mod: plan.mod,
+      hint: hint
     };
   }
 

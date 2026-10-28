@@ -439,6 +439,7 @@
       latched: false,
       enraged: false,
       burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+      phase: 0, spdMul: 1, dmgMul: 1,
       bob: Math.random() * 6.283,
       hit: 0,
       dead: false,
@@ -603,6 +604,41 @@
     m.flash = 0.1;
   }
 
+  /* Boss 阶段：血量跨过阈值时换招式 */
+  function checkPhase(b, e) {
+    var phases = e.def.phases;
+    if (!phases) return;
+    var frac = e.hp / e.maxHp;
+    while (e.phase < phases.length && frac <= phases[e.phase].at) {
+      var ph = phases[e.phase];
+      e.phase++;
+      if (ph.spd) e.spdMul *= ph.spd;
+      if (ph.dmg) e.dmgMul *= ph.dmg;
+      if (ph.lane && ph.lane !== e.lane) {
+        e.lane = ph.lane;
+        e.y = laneY(b, ph.lane);
+      }
+      if (ph.summon) {
+        ph.summon.forEach(function (kind, si) {
+          var def = D.ENEMIES[kind];
+          var hp2 = def.hp * b.plan.hpMul;
+          b.enemies.push({
+            id: b.seq++, kind: kind, def: def, lane: def.lane, side: e.side,
+            x: e.x + (si - 1) * 46, y: laneY(b, def.lane),
+            hp: hp2, maxHp: hp2, r: def.r,
+            latched: false, enraged: false, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+            phase: 0, spdMul: 1, dmgMul: 1,
+            bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+          });
+        });
+      }
+      pushLog(b, '【' + e.def.name + '】' + ph.text);
+      floatText(b, e.x, e.y - e.r - 26, ph.text, '#ff8b6b', 17);
+      burst(b, e.x, e.y, e.def.color, 26, 150);
+      b.shake = Math.min(12, b.shake + 6);
+    }
+  }
+
   function step(b, dt) {
     if (b.result) return;
     dt = clamp(dt, 0, 0.05);
@@ -646,6 +682,7 @@
       if (e.dead) continue;
       if (e.lane === 'surface') e.y = b.waterY - 10;
       if (e.hit > 0) e.hit -= dt;
+      checkPhase(b, e);
       if (e.burnT > 0) {
         e.burnT -= dt;
         hurt(b, e, e.burnDps * dt, '#e2703a', true);
@@ -654,7 +691,7 @@
       if (e.slowT > 0) e.slowT -= dt;
 
       if (!e.latched) {
-        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1);
+        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
         if (e.side === 'L') {
           e.x += spd * dt;
           if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
@@ -671,7 +708,7 @@
           e.biteCd = 0.55;
           e.hit = 0.12;
         }
-        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * dt;
+        var bite = e.def.dmg * (e.enraged ? 1.8 : 1) * (b.plan.dmgMul || 1) * (e.dmgMul || 1) * dt;
         b.hp -= bite;
         b.leak += bite;
         b.leakByLane[e.lane] += bite;
