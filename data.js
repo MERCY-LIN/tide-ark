@@ -373,6 +373,28 @@
       hint: '持续治疗周围敌人'
     },
 
+    /* ---- 行为型敌人 · 第二批 ---- */
+    bomber: {
+      name: '自爆水母', lane: 'surface', hp: 55, spd: 82, dmg: 0, r: 16,
+      color: '#e0577f', pts: 1.8, explode: 40,
+      hint: '冲到船边自爆，40 点耐久'
+    },
+    stalker: {
+      name: '潜影', lane: 'under', hp: 70, spd: 62, dmg: 10, r: 15,
+      color: '#6a4a9a', pts: 2.2, stealth: 210,
+      hint: '远距离锁定不到，只能近距离打'
+    },
+    leaper: {
+      name: '跳帮蛙', lane: 'surface', hp: 90, spd: 56, dmg: 12, r: 18,
+      color: '#8fd14f', pts: 2.6, leap: true,
+      hint: '会跃过船体，从另一侧咬'
+    },
+    brood: {
+      name: '孵化者', lane: 'under', hp: 150, spd: 36, dmg: 6, r: 22,
+      color: '#c98fd1', pts: 3.4, spawn: 'shard', spawnCd: 4.5,
+      hint: '持续孵化小怪'
+    },
+
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
@@ -467,13 +489,14 @@
 
   function poolFor(wave) {
     var p = ['drifter'];
-    if (wave >= 9) p.push('eel', 'shade', 'ray');
+    if (wave >= 9) p.push('eel', 'shade', 'ray', 'stalker', 'brood');
     if (wave >= 10) p.push('crab', 'matron');
     if (wave >= 3) p.push('bat');
     if (wave >= 4) p.push('spore');
+    if (wave >= 5) p.push('bomber');
     if (wave >= 5) p.push('diver');
     if (wave >= 6) p.push('shellback');
-    if (wave >= 7) p.push('ironclad');
+    if (wave >= 7) p.push('ironclad', 'leaper');
     if (wave >= 7) p.push('raider');
     return p;
   }

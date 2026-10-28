@@ -566,6 +566,7 @@
       if (e.dead) continue;
       if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
+      if (e.def.stealth && Math.abs(e.x - m.x) > e.def.stealth) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
       if (m.aug && m.aug.far) score = -Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
@@ -733,6 +734,25 @@
         if (e.dead) continue;
       }
       if (e.slowT > 0) e.slowT -= dt;
+      if (e.def.spawn) {
+        e.spawnT = (e.spawnT || e.def.spawnCd || 4) - dt;
+        if (e.spawnT <= 0) {
+          e.spawnT = e.def.spawnCd || 4;
+          var sdef2 = D.ENEMIES[e.def.spawn];
+          if (sdef2) {
+            var shp2 = sdef2.hp * (b.plan.hpMul || 1);
+            b.enemies.push({
+              id: b.seq++, kind: e.def.spawn, def: sdef2, lane: sdef2.lane, side: e.side,
+              x: e.x, y: laneY(b, sdef2.lane),
+              hp: shp2, maxHp: shp2, r: sdef2.r,
+              latched: false, enraged: e.enraged, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+              phase: 0, spdMul: 1, dmgMul: 1,
+              bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+            });
+            floatText(b, e.x, e.y - 26, '孵化', '#c98fd1', 13);
+          }
+        }
+      }
       if (e.def.heal) {
         e.healCd = (e.healCd || 2) - dt;
         if (e.healCd <= 0) {
@@ -751,15 +771,40 @@
       if (!e.latched) {
         var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
         var stand = e.def.standoff || 0;
+        var justLatched = false;
         if (e.side === 'L') {
           e.x += spd * dt;
           var lx = edgeX('L') - stand;
-          if (e.x >= lx) { e.x = lx; e.latched = true; }
+          if (e.x >= lx) { e.x = lx; e.latched = true; justLatched = true; }
         } else {
           e.x -= spd * dt;
           var rx = edgeX('R') + stand;
-          if (e.x <= rx) { e.x = rx; e.latched = true; }
+          if (e.x <= rx) { e.x = rx; e.latched = true; justLatched = true; }
         }
+
+        if (justLatched && e.def.leap && !e._leapt) {
+          e._leapt = true;
+          e.side = e.side === 'L' ? 'R' : 'L';
+          e.x = edgeX(e.side);
+          floatText(b, e.x, e.y - 34, '跃过船体', '#8fd14f', 15);
+          pushLog(b, e.def.name + '跃过船体，绕到了另一侧');
+        }
+
+        if (justLatched && e.def.explode && !e._boom) {
+          e._boom = true;
+          var boom = e.def.explode;
+          b.hp -= boom;
+          b.leak += boom;
+          b.leakByLane[e.lane] += boom;
+          burst(b, e.x, e.y, e.def.color, 24, 180);
+          b.blasts.push({ x: e.x, y: e.y, r: 70, life: 0.3, max: 0.3, color: e.def.color });
+          b.shake = Math.min(12, b.shake + 9);
+          e.dead = true;
+          b.killed++;
+          pushLog(b, e.def.name + '自爆了');
+          continue;
+        }
+
         if (e.latched && (e.def.boss || e.kind === 'raider')) {
           pushLog(b, e.def.name + '撞上' + (e.side === 'L' ? '左舷' : '右舷'));
         }

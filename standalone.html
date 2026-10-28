@@ -783,6 +783,28 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       hint: '持续治疗周围敌人'
     },
 
+    /* ---- 行为型敌人 · 第二批 ---- */
+    bomber: {
+      name: '自爆水母', lane: 'surface', hp: 55, spd: 82, dmg: 0, r: 16,
+      color: '#e0577f', pts: 1.8, explode: 40,
+      hint: '冲到船边自爆，40 点耐久'
+    },
+    stalker: {
+      name: '潜影', lane: 'under', hp: 70, spd: 62, dmg: 10, r: 15,
+      color: '#6a4a9a', pts: 2.2, stealth: 210,
+      hint: '远距离锁定不到，只能近距离打'
+    },
+    leaper: {
+      name: '跳帮蛙', lane: 'surface', hp: 90, spd: 56, dmg: 12, r: 18,
+      color: '#8fd14f', pts: 2.6, leap: true,
+      hint: '会跃过船体，从另一侧咬'
+    },
+    brood: {
+      name: '孵化者', lane: 'under', hp: 150, spd: 36, dmg: 6, r: 22,
+      color: '#c98fd1', pts: 3.4, spawn: 'shard', spawnCd: 4.5,
+      hint: '持续孵化小怪'
+    },
+
     /* ---- 第二幕：深潮 ---- */
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
@@ -877,13 +899,14 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function poolFor(wave) {
     var p = ['drifter'];
-    if (wave >= 9) p.push('eel', 'shade', 'ray');
+    if (wave >= 9) p.push('eel', 'shade', 'ray', 'stalker', 'brood');
     if (wave >= 10) p.push('crab', 'matron');
     if (wave >= 3) p.push('bat');
     if (wave >= 4) p.push('spore');
+    if (wave >= 5) p.push('bomber');
     if (wave >= 5) p.push('diver');
     if (wave >= 6) p.push('shellback');
-    if (wave >= 7) p.push('ironclad');
+    if (wave >= 7) p.push('ironclad', 'leaper');
     if (wave >= 7) p.push('raider');
     return p;
   }
@@ -1647,6 +1670,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (e.dead) continue;
       if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
+      if (e.def.stealth && Math.abs(e.x - m.x) > e.def.stealth) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
       if (m.aug && m.aug.far) score = -Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
@@ -1814,6 +1838,25 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         if (e.dead) continue;
       }
       if (e.slowT > 0) e.slowT -= dt;
+      if (e.def.spawn) {
+        e.spawnT = (e.spawnT || e.def.spawnCd || 4) - dt;
+        if (e.spawnT <= 0) {
+          e.spawnT = e.def.spawnCd || 4;
+          var sdef2 = D.ENEMIES[e.def.spawn];
+          if (sdef2) {
+            var shp2 = sdef2.hp * (b.plan.hpMul || 1);
+            b.enemies.push({
+              id: b.seq++, kind: e.def.spawn, def: sdef2, lane: sdef2.lane, side: e.side,
+              x: e.x, y: laneY(b, sdef2.lane),
+              hp: shp2, maxHp: shp2, r: sdef2.r,
+              latched: false, enraged: e.enraged, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+              phase: 0, spdMul: 1, dmgMul: 1,
+              bob: Math.random() * 6.283, hit: 0, dead: false, biteCd: 0
+            });
+            floatText(b, e.x, e.y - 26, '孵化', '#c98fd1', 13);
+          }
+        }
+      }
       if (e.def.heal) {
         e.healCd = (e.healCd || 2) - dt;
         if (e.healCd <= 0) {
@@ -1832,15 +1875,40 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (!e.latched) {
         var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1) * (e.spdMul || 1);
         var stand = e.def.standoff || 0;
+        var justLatched = false;
         if (e.side === 'L') {
           e.x += spd * dt;
           var lx = edgeX('L') - stand;
-          if (e.x >= lx) { e.x = lx; e.latched = true; }
+          if (e.x >= lx) { e.x = lx; e.latched = true; justLatched = true; }
         } else {
           e.x -= spd * dt;
           var rx = edgeX('R') + stand;
-          if (e.x <= rx) { e.x = rx; e.latched = true; }
+          if (e.x <= rx) { e.x = rx; e.latched = true; justLatched = true; }
         }
+
+        if (justLatched && e.def.leap && !e._leapt) {
+          e._leapt = true;
+          e.side = e.side === 'L' ? 'R' : 'L';
+          e.x = edgeX(e.side);
+          floatText(b, e.x, e.y - 34, '跃过船体', '#8fd14f', 15);
+          pushLog(b, e.def.name + '跃过船体，绕到了另一侧');
+        }
+
+        if (justLatched && e.def.explode && !e._boom) {
+          e._boom = true;
+          var boom = e.def.explode;
+          b.hp -= boom;
+          b.leak += boom;
+          b.leakByLane[e.lane] += boom;
+          burst(b, e.x, e.y, e.def.color, 24, 180);
+          b.blasts.push({ x: e.x, y: e.y, r: 70, life: 0.3, max: 0.3, color: e.def.color });
+          b.shake = Math.min(12, b.shake + 9);
+          e.dead = true;
+          b.killed++;
+          pushLog(b, e.def.name + '自爆了');
+          continue;
+        }
+
         if (e.latched && (e.def.boss || e.kind === 'raider')) {
           pushLog(b, e.def.name + '撞上' + (e.side === 'L' ? '左舷' : '右舷'));
         }
@@ -2616,6 +2684,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     g.beginPath(); g.arc(0, 0, e.r * 2.6, 0, 6.283); g.fill();
 
     var alpha = e.hit > 0 ? 0.55 : 1;
+    if (e.def.stealth) {
+      var farFromRaft = Math.abs(e.x - (D.RAFT_X + D.RAFT_W / 2)) > e.def.stealth;
+      if (farFromRaft) alpha *= 0.28;
+    }
     g.globalAlpha = alpha;
 
     if (e.kind === 'bat' || e.kind === 'ray') {
@@ -2676,6 +2748,27 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       g.fillStyle = '#2a0b14';
       g.beginPath(); g.arc(-e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
       g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
+    } else if (e.kind === 'bomber') {
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(0, -e.r * 0.15, e.r, Math.PI, 0);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = col;
+      g.lineWidth = e.r * 0.18;
+      g.lineCap = 'round';
+      for (var bi = -1; bi <= 1; bi++) {
+        g.beginPath();
+        g.moveTo(bi * e.r * 0.5, e.r * 0.15);
+        g.quadraticCurveTo(bi * e.r * 0.7, e.r * 0.9, bi * e.r * 0.35, e.r * 1.4);
+        g.stroke();
+      }
+      /* 危险提示环 */
+      g.strokeStyle = 'rgba(255,110,130,' + (0.35 + 0.35 * Math.sin(t * 8 + e.bob)) + ')';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, -e.r * 0.1, e.r * 1.5, 0, 6.283);
+      g.stroke();
     } else if (e.kind === 'eel') {
       g.strokeStyle = col;
       g.lineWidth = e.r * 0.8;
@@ -2691,7 +2784,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       g.beginPath(); g.arc(e.r * 1.1, 0, e.r * 0.85, 0, 6.283); g.fill();
       g.fillStyle = '#0a1a22';
       g.beginPath(); g.arc(e.r * 1.35, -e.r * 0.15, e.r * 0.2, 0, 6.283); g.fill();
-    } else if (e.kind === 'shade') {
+    } else if (e.kind === 'shade' || e.kind === 'stalker') {
       g.fillStyle = col;
       g.beginPath();
       g.moveTo(0, -e.r * 1.4);

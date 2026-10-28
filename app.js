@@ -540,6 +540,10 @@
     g.beginPath(); g.arc(0, 0, e.r * 2.6, 0, 6.283); g.fill();
 
     var alpha = e.hit > 0 ? 0.55 : 1;
+    if (e.def.stealth) {
+      var farFromRaft = Math.abs(e.x - (D.RAFT_X + D.RAFT_W / 2)) > e.def.stealth;
+      if (farFromRaft) alpha *= 0.28;
+    }
     g.globalAlpha = alpha;
 
     if (e.kind === 'bat' || e.kind === 'ray') {
@@ -600,6 +604,27 @@
       g.fillStyle = '#2a0b14';
       g.beginPath(); g.arc(-e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
       g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
+    } else if (e.kind === 'bomber') {
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(0, -e.r * 0.15, e.r, Math.PI, 0);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = col;
+      g.lineWidth = e.r * 0.18;
+      g.lineCap = 'round';
+      for (var bi = -1; bi <= 1; bi++) {
+        g.beginPath();
+        g.moveTo(bi * e.r * 0.5, e.r * 0.15);
+        g.quadraticCurveTo(bi * e.r * 0.7, e.r * 0.9, bi * e.r * 0.35, e.r * 1.4);
+        g.stroke();
+      }
+      /* 危险提示环 */
+      g.strokeStyle = 'rgba(255,110,130,' + (0.35 + 0.35 * Math.sin(t * 8 + e.bob)) + ')';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, -e.r * 0.1, e.r * 1.5, 0, 6.283);
+      g.stroke();
     } else if (e.kind === 'eel') {
       g.strokeStyle = col;
       g.lineWidth = e.r * 0.8;
@@ -615,7 +640,7 @@
       g.beginPath(); g.arc(e.r * 1.1, 0, e.r * 0.85, 0, 6.283); g.fill();
       g.fillStyle = '#0a1a22';
       g.beginPath(); g.arc(e.r * 1.35, -e.r * 0.15, e.r * 0.2, 0, 6.283); g.fill();
-    } else if (e.kind === 'shade') {
+    } else if (e.kind === 'shade' || e.kind === 'stalker') {
       g.fillStyle = col;
       g.beginPath();
       g.moveTo(0, -e.r * 1.4);
