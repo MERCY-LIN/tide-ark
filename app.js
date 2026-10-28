@@ -464,7 +464,7 @@
       g.closePath(); g.fill();
       g.fillStyle = '#0a1a22';
       g.beginPath(); g.arc(e.r * 0.55, -e.r * 0.15, 2.2, 0, 6.283); g.fill();
-    } else if (e.kind === 'boss') {
+    } else if (e.kind === 'boss' || e.kind === 'eye') {
       /* 触手 */
       g.strokeStyle = col;
       g.lineWidth = 6;
@@ -493,6 +493,56 @@
       g.fillStyle = '#2a0b14';
       g.beginPath(); g.arc(-e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
       g.beginPath(); g.arc(e.r * 0.35, -e.r * 0.1, e.r * 0.09, 0, 6.283); g.fill();
+    } else if (e.kind === 'eel') {
+      g.strokeStyle = col;
+      g.lineWidth = e.r * 0.8;
+      g.lineCap = 'round';
+      g.beginPath();
+      for (var seg = 0; seg <= 6; seg++) {
+        var px = -e.r * 1.8 + seg * (e.r * 0.6);
+        var py = Math.sin(t * 9 + seg * 0.9 + e.bob) * e.r * 0.5;
+        if (seg === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+      g.stroke();
+      g.fillStyle = col;
+      g.beginPath(); g.arc(e.r * 1.1, 0, e.r * 0.85, 0, 6.283); g.fill();
+      g.fillStyle = '#0a1a22';
+      g.beginPath(); g.arc(e.r * 1.35, -e.r * 0.15, e.r * 0.2, 0, 6.283); g.fill();
+    } else if (e.kind === 'shade') {
+      g.fillStyle = col;
+      g.beginPath();
+      g.moveTo(0, -e.r * 1.4);
+      g.quadraticCurveTo(e.r * 1.15, -e.r * 0.2, e.r * 0.95, e.r * 0.95);
+      g.quadraticCurveTo(0, e.r * 0.55, -e.r * 0.95, e.r * 0.95);
+      g.quadraticCurveTo(-e.r * 1.15, -e.r * 0.2, 0, -e.r * 1.4);
+      g.closePath();
+      g.globalAlpha = alpha * 0.9;
+      g.fill();
+      g.globalAlpha = alpha;
+      g.fillStyle = '#cfe9ff';
+      g.beginPath(); g.arc(e.r * 0.32, -e.r * 0.35, e.r * 0.16, 0, 6.283); g.fill();
+      g.beginPath(); g.arc(e.r * 0.72, -e.r * 0.35, e.r * 0.16, 0, 6.283); g.fill();
+    } else if (e.kind === 'crab') {
+      g.strokeStyle = col;
+      g.lineWidth = e.r * 0.22;
+      g.lineCap = 'round';
+      for (var lg = -1; lg <= 1; lg++) {
+        if (lg === 0) continue;
+        g.beginPath();
+        g.moveTo(lg * e.r * 0.8, e.r * 0.3);
+        g.lineTo(lg * e.r * 1.35, e.r * 0.9);
+        g.stroke();
+      }
+      g.fillStyle = col;
+      g.beginPath(); g.ellipse(0, e.r * 0.15, e.r * 1.15, e.r * 0.78, 0, 0, 6.283); g.fill();
+      g.lineWidth = e.r * 0.3;
+      g.beginPath();
+      g.moveTo(-e.r * 0.85, -e.r * 0.1); g.lineTo(-e.r * 1.45, -e.r * 0.75);
+      g.moveTo(e.r * 0.85, -e.r * 0.1); g.lineTo(e.r * 1.45, -e.r * 0.75);
+      g.stroke();
+      g.fillStyle = '#0a1a22';
+      g.beginPath(); g.arc(-e.r * 0.3, -e.r * 0.45, e.r * 0.16, 0, 6.283); g.fill();
+      g.beginPath(); g.arc(e.r * 0.3, -e.r * 0.45, e.r * 0.16, 0, 6.283); g.fill();
     } else {
       /* 漂流者 / 甲壳兽 / 掠夺艇 —— 通用软体 */
       g.fillStyle = col;
@@ -884,7 +934,7 @@
   function syncUI() {
     var run = S.run;
     var st = C.computeStats(run);
-    $('sWave').textContent = (S.phase === 'build' && S.started ? run.wave : Math.min(run.wave, D.MAX_WAVE)) + ' / ' + D.MAX_WAVE;
+    $('sWave').textContent = Math.min(run.wave, D.MAX_WAVE) + ' / ' + D.MAX_WAVE;
     $('sWood').textContent = run.wood;
 
     var hp = S.phase === 'battle' && S.battle ? S.battle.hp : run.hp;
@@ -1197,6 +1247,14 @@
       cleared: cleared,
       kills: b.killed
     };
+
+    /* 第一幕结束：给一次「收手还是下潜」的选择 */
+    if (cleared === D.ACT1_END) {
+      S.phase = 'act';
+      showActChoice();
+      return;
+    }
+
     S.phase = 'route';
     showRoute();
   }
@@ -1311,6 +1369,23 @@
     });
   }
 
+  function showActChoice() {
+    var html = '<h2>潮汐巨兽沉了下去</h2>' +
+      '<div class="sub">第 ' + S.route.cleared + ' 次潮汐 · ' + runSummary() + '</div>' +
+      '<p>水面安静下来。但海沟底下还有别的东西在动——<span class="hl">你可以现在收手，也可以继续下潜。</span></p>' +
+      '<div class="infogrid">' +
+      '<div class="k">收手</div><div class="v">结算这次航程，拿走残骸</div>' +
+      '<div class="k">下潜</div><div class="v">再打 4 次潮汐，最后是「潮汐之眼」，残骸翻倍</div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn" id="btnDockAct">船坞</button>' +
+      '<button class="btn" id="btnBank">收 手</button>' +
+      '<button class="btn primary" id="btnDive2">下 潜 ▼</button></div>';
+    openModal(html);
+    $('btnBank').addEventListener('click', function () { S.phase = 'victory'; showVictory(); });
+    $('btnDive2').addEventListener('click', function () { S.phase = 'route'; showRoute(); });
+    $('btnDockAct').addEventListener('click', showDock);
+  }
+
   function pickRoute(i) {
     if (!S.route) return;
     var opt = S.route.options[i];
@@ -1418,20 +1493,24 @@
   }
 
   function showVictory() {
+    var full = (S.run.wave || 0) >= D.MAX_WAVE;
     var gain = settleRun(true);
 
     /* 通关后解锁下一级潮汐刻度 */
     var prevAsc = S.meta.asc || 0;
     var unlocked = false;
-    if ((S.run.asc || 0) >= prevAsc && prevAsc < D.MAX_ASC) {
+    if (full && (S.run.asc || 0) >= prevAsc && prevAsc < D.MAX_ASC) {
       S.meta.asc = Math.min(D.MAX_ASC, (S.run.asc || 0) + 1);
       S.asc = S.meta.asc;
       saveMeta();
       unlocked = true;
     }
 
-    var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
-      '<div class="sub">你带着这条船活过了 8 次潮汐 · ' + runSummary() + '</div>' +
+    var html = '<h2 style="color:' + (full ? '#8ff0c4' : '#9dc4d6') + '">' +
+      (full ? '潮汐平息' : '活着回来') + '</h2>' +
+      '<div class="sub">' +
+      (full ? '你带着这条船一路下潜到了海沟底部' : '你在第 ' + D.ACT1_END + ' 次潮汐后收手，带着满船的东西回到了水面') +
+      ' · ' + runSummary() + '</div>' +
       '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
       '甲板上还留着这一路捞上来、拼起来的东西——那是你亲手造的船。</p>' +
       '<div class="infogrid">' +
@@ -1698,6 +1777,21 @@
       if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
       if (location.search.indexOf('dock=1') >= 0) showDock();
       if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
+      if (location.search.indexOf('beast=1') >= 0) {
+        S.battle = C.startBattle(S.run);
+        S.phase = 'battle';
+        S.battle.enemies = [];
+        ['eel', 'shade', 'crab', 'eye'].forEach(function (kind, bi) {
+          var ed = D.ENEMIES[kind];
+          var ey = ed.lane === 'air' ? 226 : (ed.lane === 'under' ? 470 : 374);
+          S.battle.enemies.push({
+            id: 900 + bi, kind: kind, def: ed, lane: ed.lane, side: 'R',
+            x: 180 + bi * 200, y: ey, hp: 9999, maxHp: 9999, r: ed.r,
+            latched: false, enraged: false, burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
+            bob: bi, hit: 0, dead: false, biteCd: 0
+          });
+        });
+      }
       if (location.search.indexOf('aug=1') >= 0) {
         S.run.augments = ['pierce', 'burn', 'recharge'];
         C.applyAug(S.run, 'splash', 1, 1);

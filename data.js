@@ -248,7 +248,7 @@
     eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
     shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
     crab: { name: '深渊钳虫', lane: 'surface', hp: 220, spd: 30, dmg: 18, r: 27, color: '#b06a4a', pts: 4.2 },
-    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 56, color: '#c85fd0', boss: true, pts: 99 }
+    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 50, color: '#c85fd0', boss: true, pts: 99 }
   };
 
   /* ---------- 模块改装：挂到单台武器上的词条 ---------- */
@@ -275,7 +275,8 @@
     { id: 'deep', name: '暗流', desc: '额外 2 只深潜者', extra: ['diver', 'diver'] }
   ];
 
-  var MAX_WAVE = 8;
+  var ACT1_END = 8;
+  var MAX_WAVE = 12;
 
   /* ---------- 每局异变：整局生效的一条规则，好坏都有 ---------- */
   var MUTATIONS = [
@@ -297,8 +298,8 @@
     lv = Math.max(0, Math.min(MAX_ASC, lv | 0));
     return {
       lv: lv,
-      hp: 1 + 0.12 * lv,
-      add: lv >= 2 ? 1 : 0,
+      hp: 1 + 0.08 * lv,
+      add: lv >= 3 ? 1 : 0,
       wood: lv >= 3 ? -10 : 0,
       spd: lv >= 4 ? 1.1 : 1,
       tide: lv >= 5 ? 1.15 : 1,
@@ -323,6 +324,8 @@
 
   function poolFor(wave) {
     var p = ['drifter'];
+    if (wave >= 9) p.push('eel', 'shade');
+    if (wave >= 10) p.push('crab');
     if (wave >= 3) p.push('bat');
     if (wave >= 5) p.push('diver');
     if (wave >= 6) p.push('shellback');
@@ -333,15 +336,20 @@
   /* ---------- 生成一波 ----------
      用 run 的 rng：同一局内可复现，不同局完全不同 */
   function makePlan(wave, rng) {
-    var isBoss = wave >= MAX_WAVE;
+    var isBoss = (wave === ACT1_END) || (wave === MAX_WAVE);
     var list = [];
     var pool = poolFor(wave);
     var budget;
     var mod = null;
 
     if (isBoss) {
-      list.push({ kind: 'boss', side: rng() < 0.5 ? 'L' : 'R' });
-      budget = 7;
+      var finalBoss = wave >= MAX_WAVE;
+      list.push({ kind: finalBoss ? 'eye' : 'boss', side: rng() < 0.5 ? 'L' : 'R' });
+      budget = finalBoss ? 11 : 7;
+    } else if (wave > ACT1_END) {
+      /* 第二幕不沿指数曲线：甲板已经到顶，只能温和加量 */
+      var base8 = 4.4 * Math.pow(1.315, ACT1_END - 1);
+      budget = base8 * (1 + 0.09 * (wave - ACT1_END));
     } else {
       budget = 4.4 * Math.pow(1.315, wave - 1);
     }
@@ -398,7 +406,7 @@
       spawns: list,
       sides: Object.keys(sides).sort(),
       mod: mod,
-      hpMul: (isBoss ? 1.45 : 1 + (wave - 1) * 0.10) * (mod && mod.hp ? mod.hp : 1),
+      hpMul: (isBoss ? (wave >= MAX_WAVE ? 1.6 : 1.45) : 1 + (Math.min(wave, ACT1_END) - 1) * 0.10) * (mod && mod.hp ? mod.hp : 1),
       spdMul: mod && mod.spd ? mod.spd : 1,
       dmgMul: mod && mod.dmg ? mod.dmg : 1,
       rangeMul: mod && mod.range ? mod.range : 1
@@ -499,7 +507,7 @@
     MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META,
     AUGMENTS: AUGMENTS, AUG_ORDER: AUG_ORDER,
-    ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
+    ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE, ACT1_END: ACT1_END,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };
 })(typeof window !== 'undefined' ? window : globalThis);
