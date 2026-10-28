@@ -232,8 +232,29 @@
     { id: 'carrier', name: '解锁母舰', cost: 120, max: 1, desc: '开局可选「母舰」' },
     { id: 'wood', name: '补给舱', cost: 80, max: 3, desc: '每局起始木材 +15' },
     { id: 'hp', name: '加固船体', cost: 80, max: 3, desc: '每局起始耐久 +25' },
-    { id: 'relic', name: '祖传遗物', cost: 220, max: 1, desc: '每局开局随机带 1 件遗物' }
+    { id: 'relic', name: '祖传遗物', cost: 220, max: 1, desc: '每局开局随机带 1 件遗物' },
+    { id: 'aug', name: '备用改装件', cost: 120, max: 3, desc: '每局开局带 1 个随机改装件' },
+    { id: 'module', name: '预制组件', cost: 150, max: 2, desc: '每局开局多 1 个随机模块' },
+    { id: 'cache', name: '压舱货舱', cost: 60, max: 10, desc: '每局起始木材 +2（可重复，价格递增）' }
   ];
+
+  /* 契约：自己给自己加难度，换残骸倍率 */
+  var CONTRACTS = [
+    { id: 'iron', name: '铁人', desc: '本局不能加固甲板', mul: 1.55, noExpand: true },
+    { id: 'poor', name: '贫穷', desc: '起始木材 -25', mul: 1.3, startWood: -25 },
+    { id: 'horde', name: '蜂拥', desc: '每波多 2 个单位', mul: 1.35, add: 2 },
+    { id: 'pressure', name: '高压', desc: '敌人生命 +35%', mul: 1.4, hp: 1.35 },
+    { id: 'rush', name: '疾行', desc: '敌人移速 +25%', mul: 1.35, spd: 1.25 },
+    { id: 'floodtide', name: '逆潮', desc: '潮水上涨 +30%', mul: 1.3, tide: 1.3 },
+    { id: 'fragile', name: '残破', desc: '起始耐久 -40', mul: 1.3, startHp: -40 },
+    { id: 'lean', name: '节衣缩食', desc: '木材收益 -30%', mul: 1.5, wood: 0.7 }
+  ];
+
+  /* 船坞价格：压舱货舱是递增的长期消耗 */
+  function metaCost(u, lv) {
+    if (u.id === 'cache') return Math.round(60 * Math.pow(1.35, lv));
+    return u.cost;
+  }
 
   /* ---------- 敌人 ---------- */
   var ENEMIES = {
@@ -524,7 +545,7 @@
     RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
     MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
-    EVENTS: EVENTS, META: META,
+    EVENTS: EVENTS, META: META, CONTRACTS: CONTRACTS, metaCost: metaCost,
     AUGMENTS: AUGMENTS, AUG_ORDER: AUG_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE, ACT1_END: ACT1_END,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32

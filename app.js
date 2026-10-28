@@ -25,6 +25,8 @@
     route: null,
     event: null,
     selAug: null,
+    contract: null,
+    contractOffers: null,
     started: false,
     log: []
   };
@@ -56,8 +58,20 @@
     S.meta.wreck = (S.meta.wreck || 0) + gain;
     S.meta.runs = (S.meta.runs || 0) + 1;
     if (won) S.meta.wins = (S.meta.wins || 0) + 1;
+    var w = S.run.wave || 0;
+    if (w > (S.meta.best || 0)) S.meta.best = w;
+    S.meta.kills = (S.meta.kills || 0) + (S.run.kills || 0);
     saveMeta();
     return gain;
+  }
+
+  function rollContractOffers() {
+    var pool = D.CONTRACTS.slice();
+    var out = [];
+    for (var i = 0; i < 3 && pool.length; i++) {
+      out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    S.contractOffers = out;
   }
 
   /* ================= 工具 ================= */
@@ -1061,6 +1075,7 @@
           t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
       });
       var bossLine = pv.hint ? '<div class="warn">⚠ ' + pv.hint + '</div>' : '';
+      var ctLine = S.run.contract ? '<div style="color:#8ff0c4">契约 · ' + S.run.contract.name + '：' + S.run.contract.desc + '</div>' : '';
       var mutLine = S.run.mut
         ? '<div style="color:#b48ce0">异变 · ' + S.run.mut.name + '：' + S.run.mut.desc + '</div>'
         : '';
@@ -1073,7 +1088,7 @@
         '<div class="k">来袭：' + pv.text + '</div>' +
         '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
         (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '') +
-        ascLine + bossLine + mutLine;
+        ascLine + bossLine + ctLine + mutLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -1578,19 +1593,20 @@
   function showDock() {
     var html = '<h2>船坞</h2>' +
       '<div class="sub">残骸 ' + (S.meta.wreck || 0) + ' · 出航 ' + (S.meta.runs || 0) +
-      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次</div>' +
+      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次 · 最远 ' + (S.meta.best || 0) + ' 波 · 累计击杀 ' + (S.meta.kills || 0) + '</div>' +
       '<p>每次沉船都会留下残骸。<span class="hl">残骸不会消失</span>，拿它永久改装你的船队。</p>' +
-      '<div class="metalist">' +
+      '<div class="metalist two">' +
       D.META.map(function (u) {
         var lv = metaLv(u.id);
         var maxed = lv >= u.max;
-        var afford = (S.meta.wreck || 0) >= u.cost;
+        var cost = D.metaCost(u, lv);
+        var afford = (S.meta.wreck || 0) >= cost;
         return '<div class="meta-row' + (maxed ? ' maxed' : '') + (afford && !maxed ? ' can' : '') +
           '" data-meta="' + u.id + '">' +
           '<div class="mn">' + u.name +
           '<span class="lv">' + (u.max > 1 ? lv + ' / ' + u.max : (maxed ? '已解锁' : '未解锁')) + '</span></div>' +
           '<div class="md">' + u.desc + '</div>' +
-          '<div class="mc">' + (maxed ? '—' : u.cost + ' 残骸') + '</div>' +
+          '<div class="mc">' + (maxed ? '—' : cost + ' 残骸') + '</div>' +
           '</div>';
       }).join('') +
       '</div>' +
@@ -1605,8 +1621,9 @@
         if (!u) return;
         var lv = metaLv(id);
         if (lv >= u.max) { toast('已经改装到顶了'); return; }
-        if ((S.meta.wreck || 0) < u.cost) { toast('残骸不够（需要 ' + u.cost + '）'); return; }
-        S.meta.wreck -= u.cost;
+        var uc = D.metaCost(u, lv);
+        if ((S.meta.wreck || 0) < uc) { toast('残骸不够（需要 ' + uc + '）'); return; }
+        S.meta.wreck -= uc;
         S.meta[id] = lv + 1;
         saveMeta();
         toast('改装完成：' + u.name);
@@ -1646,9 +1663,18 @@
   }
 
   function showShipSelect() {
+    if (!S.contractOffers) rollContractOffers();
+
+    var ctHtml = '<button class="ctchip' + (!S.contract ? ' on' : '') + '" data-ct="">不签</button>';
+    S.contractOffers.forEach(function (c) {
+      ctHtml += '<button class="ctchip' + (S.contract === c.id ? ' on' : '') +
+        '" data-ct="' + c.id + '" title="' + c.desc + '">' + c.name +
+        ' <span style="color:#8ff0c4">×' + c.mul + '</span></button>';
+    });
+
     var html = '<h2>选择你的船</h2>' +
       '<div class="sub">残骸 ' + (S.meta.wreck || 0) + ' · 出航 ' + (S.meta.runs || 0) +
-      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次</div>' +
+      ' 次 · 通关 ' + (S.meta.wins || 0) + ' 次 · 最远 ' + (S.meta.best || 0) + ' 波</div>' +
       '<div class="picks">' + D.SHIP_ORDER.map(function (id) {
         var sp = D.SHIPS[id];
         var locked = id === 'carrier' && !metaLv('carrier');
@@ -1668,6 +1694,8 @@
       '<span class="aschint">已解锁 ' + (S.meta.asc || 0) + ' / ' + D.MAX_ASC + '，通关后 +1</span></span>' +
       '<button class="btn" id="ascUp">+</button>' +
       '</div>' +
+      '<div class="ctrow"><span class="lbl">契约</span>' + ctHtml +
+      '<span class="cthint">自己加难度，换残骸倍率</span></div>' +
       '<div class="modal-actions"><button class="btn" id="btnDock">船坞</button></div>';
     openModal(html);
     $('ascDown').addEventListener('click', function () {
@@ -1677,6 +1705,12 @@
     $('ascUp').addEventListener('click', function () {
       S.asc = Math.min(S.meta.asc || 0, (S.asc || 0) + 1);
       showShipSelect();
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.ctchip'), function (el) {
+      el.addEventListener('click', function () {
+        S.contract = el.dataset.ct || null;
+        showShipSelect();
+      });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
       el.addEventListener('click', function () {
@@ -1704,7 +1738,20 @@
       wood: metaLv('wood'),
       hp: metaLv('hp'),
       relic: metaLv('relic') > 0
-    }, S.asc || 0);
+    }, S.asc || 0, (function () {
+      if (!S.contract) return null;
+      var found = null;
+      (S.contractOffers || []).forEach(function (c) { if (c.id === S.contract) found = c; });
+      return found;
+    })());
+    for (var ai = 0; ai < metaLv('aug'); ai++) {
+      C.grantAug(S.run, D.AUG_ORDER[Math.floor(Math.random() * D.AUG_ORDER.length)]);
+    }
+    for (var mi = 0; mi < metaLv('module'); mi++) {
+      var mid = D.ORDER[Math.floor(Math.random() * D.ORDER.length)];
+      S.run.stock[mid] = (S.run.stock[mid] || 0) + 1;
+    }
+    S.run.wood += 2 * metaLv('cache');
     S.battle = null;
     S.phase = 'build';
     S.sel = null;

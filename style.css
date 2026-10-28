@@ -319,3 +319,21 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 .ascval { flex: 1; font-size: 13px; color: #9dc4d6; letter-spacing: .5px; }
 .ascval b { color: #ffcf8a; font-size: 16px; margin: 0 2px; }
 .aschint { display: block; font-size: 11px; color: #517b90; margin-top: 3px; }
+/* ---------------- 契约 ---------------- */
+.ctrow {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 8px 0 4px; padding: 9px 14px;
+  border-radius: 9px; background: #0c1922; border: 1px solid #1d3446;
+}
+.ctrow .lbl { font-size: 12px; color: #6f9db4; letter-spacing: 1px; margin-right: 3px; }
+.cthint { font-size: 11px; color: #3f6678; margin-left: auto; }
+.ctchip {
+  padding: 5px 11px; border-radius: 7px;
+  background: #12222f; border: 1px solid #23475c;
+  color: #b9d4e2; font-size: 12px; cursor: pointer;
+  font-family: inherit; transition: .12s;
+}
+.ctchip:hover { border-color: #4a8fb0; background: #17334a; }
+.ctchip.on { border-color: #ffcf8a; box-shadow: 0 0 0 1px #ffcf8a; color: #ffe9c4; }
+.metalist.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 620px) { .metalist.two { grid-template-columns: 1fr; } }

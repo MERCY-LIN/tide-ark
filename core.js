@@ -16,8 +16,9 @@
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed, shipId, meta, asc) {
+  function newRun(seed, shipId, meta, asc, contract) {
     meta = meta || {};
+    var ct = contract || null;
     asc = Math.max(0, Math.min(D.MAX_ASC, asc | 0));
     var am = D.ascMods(asc);
     var bonusWood = 15 * (meta.wood || 0) + am.wood;
@@ -55,6 +56,11 @@
     run.asc = asc;
     run.ascMods = am;
     run.mut = D.makeMutation(run.rng);
+    run.contract = ct;
+    if (ct) {
+      if (ct.startWood) run.wood += ct.startWood;
+      if (ct.startHp) { run.hp += ct.startHp; run.baseHp += ct.startHp; }
+    }
     if (run.mut.startWood) run.wood += run.mut.startWood;
     if (meta.relic) grantRelic(run);
     if (ship.perk === 'stock') {
@@ -71,12 +77,12 @@
     var plan = D.makePlan(run.wave, run.rng);
     var am = run.ascMods || D.ascMods(0);
     var mut = run.mut || {};
-    plan.hpMul *= am.hp * (mut.hp || 1);
-    plan.spdMul *= (mut.spd || 1) * (am.spd || 1);
+    plan.hpMul *= am.hp * (mut.hp || 1) * ((run.contract && run.contract.hp) || 1);
+    plan.spdMul *= (mut.spd || 1) * (am.spd || 1) * ((run.contract && run.contract.spd) || 1);
     plan.dmgMul *= (mut.bite || 1);
     plan.underHp = mut.underHp || 1;
     /* 前两波不加量：否则一个坏异变会在你还没建起来时就把你淹了 */
-    var bonusAdd = (run.wave >= 2 ? (am.add || 0) : 0) + (run.wave >= 3 ? (mut.add || 0) : 0);
+    var bonusAdd = (run.wave >= 2 ? (am.add || 0) : 0) + (run.wave >= 3 ? (mut.add || 0) : 0) + (run.wave >= 2 ? ((run.contract && run.contract.add) || 0) : 0);
     if (bonusAdd > 0) {
       var pool0 = ['drifter'];
       if (run.wave >= 3) pool0.push('bat');
@@ -137,6 +143,7 @@
 
   function canExpand(run, col) {
     var e = expandDef(col);
+    if (run.contract && run.contract.noExpand) return '本局契约：不能加固甲板';
     if (!e) return '这一列不能扩建';
     if (isUnlocked(run, col)) return '已经加固过了';
     if (!adjacentUnlocked(run, col)) return '要先加固相邻的列';
@@ -233,6 +240,10 @@
     if (mut.underDmg) st.laneDmg.under *= mut.underDmg;
     if (mut.expand) st.expandMul = st.expandMul * mut.expand;
     if (mut.range) st.rangeMul = (st.rangeMul || 1) * mut.range;
+
+    /* --- 契约 --- */
+    var ct2 = run.contract || {};
+    if (ct2.tide) st.tideMul *= ct2.tide;
 
     /* --- 潮汐刻度 --- */
     var am = run.ascMods || { tide: 1 };
@@ -779,7 +790,7 @@
     var base = 10 + Math.round(run.wave * 2.5);
     var salvage = b ? b.st.salvage : computeStats(run).salvage;
     var mut = run.mut || {};
-    var total = (base + salvage) * (mut.wood || 1) + (mut.woodFlat || 0);
+    var total = (base + salvage) * (mut.wood || 1) * (((run.contract && run.contract.wood) || 1)) + (mut.woodFlat || 0);
     return Math.round(total);
   }
 
@@ -907,7 +918,7 @@
 
   function wreckageOf(run, won) {
     var base = (run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0);
-    var mul = run.ascMods ? run.ascMods.wreck : 1;
+    var mul = (run.ascMods ? run.ascMods.wreck : 1) * (run.contract ? (run.contract.mul || 1) : 1);
     return Math.round(base * mul);
   }
 
