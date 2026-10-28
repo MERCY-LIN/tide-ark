@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark
    app.js —— 渲染 / 交互 / 流程
    ============================================================ */
@@ -953,12 +953,19 @@
         tagParts.push('<span style="color:' + (on ? t.color : '#4a6a7a') + '">' +
           t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
       });
+      var mutLine = S.run.mut
+        ? '<div style="color:#b48ce0">异变 · ' + S.run.mut.name + '：' + S.run.mut.desc + '</div>'
+        : '';
+      var ascLine = (S.run.asc || 0) > 0
+        ? '<div class="warn">潮汐刻度 ' + S.run.asc + ' · ' + D.ASC_NAME[S.run.asc] + '</div>'
+        : '';
       el.innerHTML =
         '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b>' +
         '<span style="color:#5f8ea4"> 《' + shipName + '》</span></div>' +
         '<div class="k">来袭：' + pv.text + '</div>' +
         '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
-        (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '');
+        (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '') +
+        ascLine + mutLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -1287,6 +1294,7 @@
     var parts = [];
     var ship = D.SHIPS[S.run.ship];
     if (ship) parts.push(ship.name);
+    if (S.run.mut) parts.push('异变·' + S.run.mut.name);
     if (S.run.relics && S.run.relics.length) parts.push('遗物 ' + S.run.relics.length + ' 件');
     var ups = Object.keys(S.run.up || {}).filter(function (k) { return S.run.up[k] > 0; });
     if (ups.length) parts.push('改造 ' + ups.length + ' 项');
@@ -1328,6 +1336,17 @@
 
   function showVictory() {
     var gain = settleRun(true);
+
+    /* 通关后解锁下一级潮汐刻度 */
+    var prevAsc = S.meta.asc || 0;
+    var unlocked = false;
+    if ((S.run.asc || 0) >= prevAsc && prevAsc < D.MAX_ASC) {
+      S.meta.asc = Math.min(D.MAX_ASC, (S.run.asc || 0) + 1);
+      S.asc = S.meta.asc;
+      saveMeta();
+      unlocked = true;
+    }
+
     var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
       '<div class="sub">你带着这条船活过了 8 次潮汐 · ' + runSummary() + '</div>' +
       '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
@@ -1336,6 +1355,8 @@
       '<div class="k">总击杀</div><div class="v">' + S.run.kills + '</div>' +
       '<div class="k">剩余耐久</div><div class="v ok">' + Math.round(S.run.hp) + '</div>' +
       '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
+      (unlocked ? '<div class="k">潮汐刻度</div><div class="v ok">解锁到 ' + S.meta.asc + ' · ' + D.ASC_NAME[S.meta.asc] +
+        '（敌人更强，残骸更多）</div>' : '') +
       '</div>' +
       '<div class="modal-actions"><button class="btn" id="btnDock3">船坞</button>' +
       '<button class="btn primary" id="btnAgain">再漂一次</button></div>';
@@ -1402,6 +1423,8 @@
       '<div class="k">羁绊</div><div class="v">模块带标签：<b>炮击 / 燃烧 / 机械</b>，同一标签凑到 2 个、4 个触发质变</div>' +
       '<div class="k">事件</div><div class="v">路线里会撞上<a style="color:#b48ce0">遭遇</a>，每个选择都有代价</div>' +
       '<div class="k">残骸</div><div class="v">沉船也有收获，<b>永久</b>改装船队（解锁母舰 / 起始补给 / 祖传遗物）</div>' +
+      '<div class="k">异变</div><div class="v">每局开局抽一条<b>全局规则</b>（逆潮 / 丰饶 / 浓雾…），好坏都有，整局生效</div>' +
+      '<div class="k">刻度</div><div class="v">通关后解锁更高的<b>潮汐刻度</b>：敌人更强，残骸更多</div>' +
       '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
       '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
@@ -1430,8 +1453,22 @@
           '<br><span style="color:#5f8ea4">甲板 ' + sp.cols.length + ' 列 · 木材 ' + sp.wood + ' · 耐久 ' + sp.hp + '</span></div>' +
           '</div>';
       }).join('') + '</div>' +
+      '<div class="ascrow">' +
+      '<button class="btn" id="ascDown">−</button>' +
+      '<span class="ascval">潮汐刻度 <b>' + (S.asc || 0) + '</b> · ' + D.ASC_NAME[S.asc || 0] +
+      '<span class="aschint">已解锁 ' + (S.meta.asc || 0) + ' / ' + D.MAX_ASC + '，通关后 +1</span></span>' +
+      '<button class="btn" id="ascUp">+</button>' +
+      '</div>' +
       '<div class="modal-actions"><button class="btn" id="btnDock">船坞</button></div>';
     openModal(html);
+    $('ascDown').addEventListener('click', function () {
+      S.asc = Math.max(0, (S.asc || 0) - 1);
+      showShipSelect();
+    });
+    $('ascUp').addEventListener('click', function () {
+      S.asc = Math.min(S.meta.asc || 0, (S.asc || 0) + 1);
+      showShipSelect();
+    });
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
       el.addEventListener('click', function () {
         var id = el.dataset.ship;
@@ -1458,7 +1495,7 @@
       wood: metaLv('wood'),
       hp: metaLv('hp'),
       relic: metaLv('relic') > 0
-    });
+    }, S.asc || 0);
     S.battle = null;
     S.phase = 'build';
     S.sel = null;
@@ -1545,11 +1582,14 @@
 
   /* ================= 启动 ================= */
   S.meta = loadMeta();
+  if (S.meta.asc === undefined) S.meta.asc = 0;
+  S.asc = S.meta.asc;
   buildPalette();
   syncUI();
   if (location.search.indexOf('nointro') >= 0) {
     S.started = true;
     closeModal();
+    syncUI();
     /* 调试：预置一套甲板，便于截图检查 */
     if (location.search.indexOf('demo') >= 0) {
       S.run.unlocked = [1, 2, 3, 4];

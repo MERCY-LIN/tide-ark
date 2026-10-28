@@ -182,7 +182,8 @@ function logBattle(b) {
 /* ---------- 单局 ---------- */
 function playOne(log) {
   const ship = ['barge', 'gunboat', 'carrier'][Math.floor(Math.random() * 3)];
-  const run = C.newRun(12345 + (log ? 0 : Math.floor(Math.random() * 1e6)), ship);
+  const ascArg = parseInt((process.argv.find(a => a.startsWith('--asc=')) || '--asc=0').split('=')[1], 10) || 0;
+  const run = C.newRun(12345 + (log ? 0 : Math.floor(Math.random() * 1e6)), ship, {}, ascArg);
   const trace = [];
 
   for (let w = 1; w <= D.MAX_WAVE; w++) {

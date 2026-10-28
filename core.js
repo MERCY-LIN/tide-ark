@@ -16,9 +16,11 @@
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed, shipId, meta) {
+  function newRun(seed, shipId, meta, asc) {
     meta = meta || {};
-    var bonusWood = 15 * (meta.wood || 0);
+    asc = Math.max(0, Math.min(D.MAX_ASC, asc | 0));
+    var am = D.ascMods(asc);
+    var bonusWood = 15 * (meta.wood || 0) + am.wood;
     var bonusHp = 25 * (meta.hp || 0);
     var stock = {};
     D.ORDER.forEach(function (id) { stock[id] = 0; });
@@ -48,6 +50,10 @@
       plan: null
     };
     run.rng = D.mulberry32(run.seed);
+    run.asc = asc;
+    run.ascMods = am;
+    run.mut = D.makeMutation(run.rng);
+    if (run.mut.startWood) run.wood += run.mut.startWood;
     if (meta.relic) grantRelic(run);
     if (ship.perk === 'stock') {
       for (var i = 0; i < 2; i++) {
@@ -61,6 +67,27 @@
 
   function planWave(run) {
     var plan = D.makePlan(run.wave, run.rng);
+    var am = run.ascMods || D.ascMods(0);
+    var mut = run.mut || {};
+    plan.hpMul *= am.hp * (mut.hp || 1);
+    plan.spdMul *= (mut.spd || 1) * (am.spd || 1);
+    plan.dmgMul *= (mut.bite || 1);
+    plan.underHp = mut.underHp || 1;
+    /* 前两波不加量：否则一个坏异变会在你还没建起来时就把你淹了 */
+    var bonusAdd = (run.wave >= 2 ? (am.add || 0) : 0) + (run.wave >= 3 ? (mut.add || 0) : 0);
+    if (bonusAdd > 0) {
+      var pool0 = ['drifter'];
+      if (run.wave >= 3) pool0.push('bat');
+      if (run.wave >= 5) pool0.push('diver');
+      if (run.wave >= 6) pool0.push('shellback');
+      for (var bi = 0; bi < bonusAdd; bi++) {
+        plan.spawns.push({ kind: pool0[Math.floor(run.rng() * pool0.length)], side: run.rng() < 0.5 ? 'L' : 'R' });
+      }
+    }
+    if ((run.relics || []).indexOf('echo') >= 0) {
+      var em = D.ORDER[Math.floor(run.rng() * D.ORDER.length)];
+      run.stock[em] = (run.stock[em] || 0) + 1;
+    }
     if (run.pending) {
       plan.hpMul *= run.pending.hpMul;
       var pool = ['drifter'];
@@ -160,7 +187,8 @@
       boostMul: 1.2,
       aoeMul: 1,
       fireBurst: 0,
-      expandMul: 1
+      expandMul: 1,
+      rangeMul: 1
     };
     var cells = cellsOf(run);
 
@@ -195,6 +223,23 @@
     st.fireBurst = tagCount.fire >= 4 ? 18 : 0;
     st.boostMul = tagCount.mech >= 2 ? 1.4 : 1.2;
     if (tagCount.mech >= 4) { st.salvage += 20; st.expandMul = (st.expandMul || 1) * 0.75; }
+
+    /* --- 本局异变 --- */
+    var mut = run.mut || {};
+    if (mut.tide) st.tideMul *= mut.tide;
+    if (mut.repair) st.repairPerWave += mut.repair;
+    if (mut.underDmg) st.laneDmg.under *= mut.underDmg;
+    if (mut.expand) st.expandMul = st.expandMul * mut.expand;
+    if (mut.range) st.rangeMul = (st.rangeMul || 1) * mut.range;
+
+    /* --- 潮汐刻度 --- */
+    var am = run.ascMods || { tide: 1 };
+    st.tideMul *= am.tide;
+
+    /* --- 行为型遗物 --- */
+    if (has('furnace')) { st.dmgMul *= 0.85; st.fireBurst = Math.max(st.fireBurst || 0, 25); }
+    if (has('doubleedge')) { st.dmgMul *= 1.3; st.maxHp = Math.round(st.maxHp * 0.65); }
+    if (has('tideclock')) st.tideMul *= 0.7;
 
     cells.forEach(function (x) {
       var e = x.def.effect;
@@ -336,7 +381,7 @@
 
   function spawn(b, s) {
     var def = D.ENEMIES[s.kind];
-    var hp = def.hp * b.plan.hpMul;
+    var hp = def.hp * b.plan.hpMul * (def.lane === 'under' ? (b.plan.underHp || 1) : 1);
     b.enemies.push({
       id: b.seq++,
       kind: s.kind,
@@ -426,7 +471,7 @@
 
   function acquire(b, m) {
     var lane = m.def.lane;
-    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1);
+    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
     var best = null, bestScore = Infinity;
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
@@ -613,7 +658,9 @@
   function rewardWood(run, b) {
     var base = 10 + Math.round(run.wave * 2.5);
     var salvage = b ? b.st.salvage : computeStats(run).salvage;
-    return base + salvage;
+    var mut = run.mut || {};
+    var total = (base + salvage) * (mut.wood || 1) + (mut.woodFlat || 0);
+    return Math.round(total);
   }
 
   function afterWave(run, b) {
@@ -732,7 +779,9 @@
   }
 
   function wreckageOf(run, won) {
-    return Math.round((run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0));
+    var base = (run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0);
+    var mul = run.ascMods ? run.ascMods.wreck : 1;
+    return Math.round(base * mul);
   }
 
   root.Core = {

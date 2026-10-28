@@ -166,9 +166,13 @@
     spares: { name: '备用零件', desc: '每波开始修复 +15' },
     twin: { name: '双联装', desc: '弹药库加成 +25%' },
     tidechild: { name: '潮汐之子', desc: '满潮时敌人不再狂暴（仍会进水）' },
-    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' }
+    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' },
+    furnace: { name: '熔炉', desc: '武器伤害 -15%，但击杀时爆炸 25' },
+    doubleedge: { name: '双刃', desc: '伤害 +30%，耐久上限 -35%' },
+    tideclock: { name: '潮汐钟', desc: '潮水上涨速度 -30%' },
+    echo: { name: '回响', desc: '每波开始随机获得 1 个模块' }
   };
-  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint'];
+  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint', 'furnace', 'doubleedge', 'tideclock', 'echo'];
 
   /* ---------- 事件：路线里的一次故事 ----------
      eff 支持：wood / hp / relic / module / upgrade / modHp（下一波难度） */
@@ -252,6 +256,40 @@
   ];
 
   var MAX_WAVE = 8;
+
+  /* ---------- 每局异变：整局生效的一条规则，好坏都有 ---------- */
+  var MUTATIONS = [
+    { id: 'reverse', name: '逆潮', desc: '潮水上涨 +20%，但每波结束 +25 木材', tide: 1.2, woodFlat: 25 },
+    { id: 'bounty', name: '丰饶', desc: '木材收益 +35%，敌方生命 +18%', wood: 1.35, hp: 1.18 },
+    { id: 'still', name: '静水', desc: '敌方移速 -15%，但你的射程 -10%', spd: 0.85, range: 0.9 },
+    { id: 'blood', name: '血月', desc: '敌方啃咬 +30%，但每波修复 +25', bite: 1.3, repair: 25 },
+    { id: 'steel', name: '钢铁', desc: '敌方生命 +28%，但加固费用 -30%', hp: 1.28, expand: 0.7 },
+    { id: 'abyss', name: '深潜', desc: '水下敌人生命 +50%，你对潜伤害 +50%', underHp: 1.5, underDmg: 1.5 },
+    { id: 'fogbank', name: '浓雾', desc: '所有射程 -20%，敌方生命 -15%', range: 0.8, hp: 0.85 },
+    { id: 'swarm', name: '蜂群', desc: '每波多 2 个单位，生命 -20%', add: 2, hp: 0.8 },
+    { id: 'slowtide', name: '慢潮', desc: '潮水上涨 -25%，但每波多 1 个单位', tide: 0.75, add: 1 },
+    { id: 'waste', name: '废土', desc: '起始木材 -20，但每波结束 +18', woodFlat: 18, startWood: -20 }
+  ];
+
+  /* ---------- 潮汐刻度：通关后解锁的进阶难度 ---------- */
+  var MAX_ASC = 5;
+  function ascMods(lv) {
+    lv = Math.max(0, Math.min(MAX_ASC, lv | 0));
+    return {
+      lv: lv,
+      hp: 1 + 0.12 * lv,
+      add: lv >= 2 ? 1 : 0,
+      wood: lv >= 3 ? -10 : 0,
+      spd: lv >= 4 ? 1.1 : 1,
+      tide: lv >= 5 ? 1.15 : 1,
+      wreck: 1 + 0.3 * lv
+    };
+  }
+  var ASC_NAME = ['平静', '涟漪', '涌浪', '暗涌', '风暴', '大潮'];
+
+  function makeMutation(rng) {
+    return MUTATIONS[Math.floor(rng() * MUTATIONS.length)];
+  }
 
   /* ---------- 确定性随机 ---------- */
   function mulberry32(a) {
@@ -436,6 +474,7 @@
     SHIPS: SHIPS, SHIP_ORDER: SHIP_ORDER,
     RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
+    MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32

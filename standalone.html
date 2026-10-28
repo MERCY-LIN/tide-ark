@@ -101,7 +101,7 @@ canvas#cv.placing { cursor: crosshair; }
   background: rgba(8, 20, 29, .82);
   border: 1px solid #1d3a4d;
   font-size: 12px; line-height: 1.7; color: #9dc4d6;
-  pointer-events: none; max-width: 340px;
+  pointer-events: none; max-width: 380px;
   backdrop-filter: blur(3px);
 }
 #preview .k { color: #6fa3ba; }
@@ -300,6 +300,16 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 .meta-row .lv { font-size: 11px; color: #5f8ea4; margin-left: 8px; }
 .meta-row .md { grid-area: d; font-size: 12px; color: #7fa9bd; line-height: 1.5; }
 .meta-row .mc { grid-area: c; font-size: 13px; color: #e8c07a; align-self: center; font-variant-numeric: tabular-nums; }
+/* ---------------- 潮汐刻度 ---------------- */
+.ascrow {
+  display: flex; align-items: center; gap: 10px;
+  margin: 16px 0 4px; padding: 10px 14px;
+  border-radius: 9px; background: #0c1922; border: 1px solid #1d3446;
+}
+.ascrow .btn { padding: 5px 13px; font-size: 15px; line-height: 1; }
+.ascval { flex: 1; font-size: 13px; color: #9dc4d6; letter-spacing: .5px; }
+.ascval b { color: #ffcf8a; font-size: 16px; margin: 0 2px; }
+.aschint { display: block; font-size: 11px; color: #517b90; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -513,9 +523,13 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     spares: { name: '备用零件', desc: '每波开始修复 +15' },
     twin: { name: '双联装', desc: '弹药库加成 +25%' },
     tidechild: { name: '潮汐之子', desc: '满潮时敌人不再狂暴（仍会进水）' },
-    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' }
+    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' },
+    furnace: { name: '熔炉', desc: '武器伤害 -15%，但击杀时爆炸 25' },
+    doubleedge: { name: '双刃', desc: '伤害 +30%，耐久上限 -35%' },
+    tideclock: { name: '潮汐钟', desc: '潮水上涨速度 -30%' },
+    echo: { name: '回响', desc: '每波开始随机获得 1 个模块' }
   };
-  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint'];
+  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint', 'furnace', 'doubleedge', 'tideclock', 'echo'];
 
   /* ---------- 事件：路线里的一次故事 ----------
      eff 支持：wood / hp / relic / module / upgrade / modHp（下一波难度） */
@@ -599,6 +613,40 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   ];
 
   var MAX_WAVE = 8;
+
+  /* ---------- 每局异变：整局生效的一条规则，好坏都有 ---------- */
+  var MUTATIONS = [
+    { id: 'reverse', name: '逆潮', desc: '潮水上涨 +20%，但每波结束 +25 木材', tide: 1.2, woodFlat: 25 },
+    { id: 'bounty', name: '丰饶', desc: '木材收益 +35%，敌方生命 +18%', wood: 1.35, hp: 1.18 },
+    { id: 'still', name: '静水', desc: '敌方移速 -15%，但你的射程 -10%', spd: 0.85, range: 0.9 },
+    { id: 'blood', name: '血月', desc: '敌方啃咬 +30%，但每波修复 +25', bite: 1.3, repair: 25 },
+    { id: 'steel', name: '钢铁', desc: '敌方生命 +28%，但加固费用 -30%', hp: 1.28, expand: 0.7 },
+    { id: 'abyss', name: '深潜', desc: '水下敌人生命 +50%，你对潜伤害 +50%', underHp: 1.5, underDmg: 1.5 },
+    { id: 'fogbank', name: '浓雾', desc: '所有射程 -20%，敌方生命 -15%', range: 0.8, hp: 0.85 },
+    { id: 'swarm', name: '蜂群', desc: '每波多 2 个单位，生命 -20%', add: 2, hp: 0.8 },
+    { id: 'slowtide', name: '慢潮', desc: '潮水上涨 -25%，但每波多 1 个单位', tide: 0.75, add: 1 },
+    { id: 'waste', name: '废土', desc: '起始木材 -20，但每波结束 +18', woodFlat: 18, startWood: -20 }
+  ];
+
+  /* ---------- 潮汐刻度：通关后解锁的进阶难度 ---------- */
+  var MAX_ASC = 5;
+  function ascMods(lv) {
+    lv = Math.max(0, Math.min(MAX_ASC, lv | 0));
+    return {
+      lv: lv,
+      hp: 1 + 0.12 * lv,
+      add: lv >= 2 ? 1 : 0,
+      wood: lv >= 3 ? -10 : 0,
+      spd: lv >= 4 ? 1.1 : 1,
+      tide: lv >= 5 ? 1.15 : 1,
+      wreck: 1 + 0.3 * lv
+    };
+  }
+  var ASC_NAME = ['平静', '涟漪', '涌浪', '暗涌', '风暴', '大潮'];
+
+  function makeMutation(rng) {
+    return MUTATIONS[Math.floor(rng() * MUTATIONS.length)];
+  }
 
   /* ---------- 确定性随机 ---------- */
   function mulberry32(a) {
@@ -783,6 +831,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     SHIPS: SHIPS, SHIP_ORDER: SHIP_ORDER,
     RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
+    MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
@@ -809,9 +858,11 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed, shipId, meta) {
+  function newRun(seed, shipId, meta, asc) {
     meta = meta || {};
-    var bonusWood = 15 * (meta.wood || 0);
+    asc = Math.max(0, Math.min(D.MAX_ASC, asc | 0));
+    var am = D.ascMods(asc);
+    var bonusWood = 15 * (meta.wood || 0) + am.wood;
     var bonusHp = 25 * (meta.hp || 0);
     var stock = {};
     D.ORDER.forEach(function (id) { stock[id] = 0; });
@@ -841,6 +892,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       plan: null
     };
     run.rng = D.mulberry32(run.seed);
+    run.asc = asc;
+    run.ascMods = am;
+    run.mut = D.makeMutation(run.rng);
+    if (run.mut.startWood) run.wood += run.mut.startWood;
     if (meta.relic) grantRelic(run);
     if (ship.perk === 'stock') {
       for (var i = 0; i < 2; i++) {
@@ -854,6 +909,27 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function planWave(run) {
     var plan = D.makePlan(run.wave, run.rng);
+    var am = run.ascMods || D.ascMods(0);
+    var mut = run.mut || {};
+    plan.hpMul *= am.hp * (mut.hp || 1);
+    plan.spdMul *= (mut.spd || 1) * (am.spd || 1);
+    plan.dmgMul *= (mut.bite || 1);
+    plan.underHp = mut.underHp || 1;
+    /* 前两波不加量：否则一个坏异变会在你还没建起来时就把你淹了 */
+    var bonusAdd = (run.wave >= 2 ? (am.add || 0) : 0) + (run.wave >= 3 ? (mut.add || 0) : 0);
+    if (bonusAdd > 0) {
+      var pool0 = ['drifter'];
+      if (run.wave >= 3) pool0.push('bat');
+      if (run.wave >= 5) pool0.push('diver');
+      if (run.wave >= 6) pool0.push('shellback');
+      for (var bi = 0; bi < bonusAdd; bi++) {
+        plan.spawns.push({ kind: pool0[Math.floor(run.rng() * pool0.length)], side: run.rng() < 0.5 ? 'L' : 'R' });
+      }
+    }
+    if ((run.relics || []).indexOf('echo') >= 0) {
+      var em = D.ORDER[Math.floor(run.rng() * D.ORDER.length)];
+      run.stock[em] = (run.stock[em] || 0) + 1;
+    }
     if (run.pending) {
       plan.hpMul *= run.pending.hpMul;
       var pool = ['drifter'];
@@ -953,7 +1029,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       boostMul: 1.2,
       aoeMul: 1,
       fireBurst: 0,
-      expandMul: 1
+      expandMul: 1,
+      rangeMul: 1
     };
     var cells = cellsOf(run);
 
@@ -988,6 +1065,23 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     st.fireBurst = tagCount.fire >= 4 ? 18 : 0;
     st.boostMul = tagCount.mech >= 2 ? 1.4 : 1.2;
     if (tagCount.mech >= 4) { st.salvage += 20; st.expandMul = (st.expandMul || 1) * 0.75; }
+
+    /* --- 本局异变 --- */
+    var mut = run.mut || {};
+    if (mut.tide) st.tideMul *= mut.tide;
+    if (mut.repair) st.repairPerWave += mut.repair;
+    if (mut.underDmg) st.laneDmg.under *= mut.underDmg;
+    if (mut.expand) st.expandMul = st.expandMul * mut.expand;
+    if (mut.range) st.rangeMul = (st.rangeMul || 1) * mut.range;
+
+    /* --- 潮汐刻度 --- */
+    var am = run.ascMods || { tide: 1 };
+    st.tideMul *= am.tide;
+
+    /* --- 行为型遗物 --- */
+    if (has('furnace')) { st.dmgMul *= 0.85; st.fireBurst = Math.max(st.fireBurst || 0, 25); }
+    if (has('doubleedge')) { st.dmgMul *= 1.3; st.maxHp = Math.round(st.maxHp * 0.65); }
+    if (has('tideclock')) st.tideMul *= 0.7;
 
     cells.forEach(function (x) {
       var e = x.def.effect;
@@ -1129,7 +1223,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function spawn(b, s) {
     var def = D.ENEMIES[s.kind];
-    var hp = def.hp * b.plan.hpMul;
+    var hp = def.hp * b.plan.hpMul * (def.lane === 'under' ? (b.plan.underHp || 1) : 1);
     b.enemies.push({
       id: b.seq++,
       kind: s.kind,
@@ -1219,7 +1313,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function acquire(b, m) {
     var lane = m.def.lane;
-    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1);
+    var reach = (m.def.range + b.st.rangeBonus) * CELL * (b.plan.rangeMul || 1) * (b.st.rangeMul || 1);
     var best = null, bestScore = Infinity;
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
@@ -1406,7 +1500,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   function rewardWood(run, b) {
     var base = 10 + Math.round(run.wave * 2.5);
     var salvage = b ? b.st.salvage : computeStats(run).salvage;
-    return base + salvage;
+    var mut = run.mut || {};
+    var total = (base + salvage) * (mut.wood || 1) + (mut.woodFlat || 0);
+    return Math.round(total);
   }
 
   function afterWave(run, b) {
@@ -1525,7 +1621,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   }
 
   function wreckageOf(run, won) {
-    return Math.round((run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0));
+    var base = (run.wave || 1) * 12 + (run.kills || 0) * 0.6 + (won ? 80 : 0);
+    var mul = run.ascMods ? run.ascMods.wreck : 1;
+    return Math.round(base * mul);
   }
 
   root.Core = {
@@ -1546,7 +1644,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
 
 /* ==== app.js ==== */
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark
    app.js —— 渲染 / 交互 / 流程
    ============================================================ */
@@ -2501,12 +2599,19 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         tagParts.push('<span style="color:' + (on ? t.color : '#4a6a7a') + '">' +
           t.name + ' ' + n + (n >= t.t4 ? '★' : '') + '</span>');
       });
+      var mutLine = S.run.mut
+        ? '<div style="color:#b48ce0">异变 · ' + S.run.mut.name + '：' + S.run.mut.desc + '</div>'
+        : '';
+      var ascLine = (S.run.asc || 0) > 0
+        ? '<div class="warn">潮汐刻度 ' + S.run.asc + ' · ' + D.ASC_NAME[S.run.asc] + '</div>'
+        : '';
       el.innerHTML =
         '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b>' +
         '<span style="color:#5f8ea4"> 《' + shipName + '》</span></div>' +
         '<div class="k">来袭：' + pv.text + '</div>' +
         '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine +
-        (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '');
+        (tagParts.length ? '<div class="k">羁绊：' + tagParts.join(' · ') + '</div>' : '') +
+        ascLine + mutLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -2835,6 +2940,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     var parts = [];
     var ship = D.SHIPS[S.run.ship];
     if (ship) parts.push(ship.name);
+    if (S.run.mut) parts.push('异变·' + S.run.mut.name);
     if (S.run.relics && S.run.relics.length) parts.push('遗物 ' + S.run.relics.length + ' 件');
     var ups = Object.keys(S.run.up || {}).filter(function (k) { return S.run.up[k] > 0; });
     if (ups.length) parts.push('改造 ' + ups.length + ' 项');
@@ -2876,6 +2982,17 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function showVictory() {
     var gain = settleRun(true);
+
+    /* 通关后解锁下一级潮汐刻度 */
+    var prevAsc = S.meta.asc || 0;
+    var unlocked = false;
+    if ((S.run.asc || 0) >= prevAsc && prevAsc < D.MAX_ASC) {
+      S.meta.asc = Math.min(D.MAX_ASC, (S.run.asc || 0) + 1);
+      S.asc = S.meta.asc;
+      saveMeta();
+      unlocked = true;
+    }
+
     var html = '<h2 style="color:#8ff0c4">潮汐平息</h2>' +
       '<div class="sub">你带着这条船活过了 8 次潮汐 · ' + runSummary() + '</div>' +
       '<p>深处的巨兽沉回海沟，水面第一次安静下来。' +
@@ -2884,6 +3001,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       '<div class="k">总击杀</div><div class="v">' + S.run.kills + '</div>' +
       '<div class="k">剩余耐久</div><div class="v ok">' + Math.round(S.run.hp) + '</div>' +
       '<div class="k">残骸</div><div class="v ok">+' + gain + '（共 ' + S.meta.wreck + '）</div>' +
+      (unlocked ? '<div class="k">潮汐刻度</div><div class="v ok">解锁到 ' + S.meta.asc + ' · ' + D.ASC_NAME[S.meta.asc] +
+        '（敌人更强，残骸更多）</div>' : '') +
       '</div>' +
       '<div class="modal-actions"><button class="btn" id="btnDock3">船坞</button>' +
       '<button class="btn primary" id="btnAgain">再漂一次</button></div>';
@@ -2950,6 +3069,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       '<div class="k">羁绊</div><div class="v">模块带标签：<b>炮击 / 燃烧 / 机械</b>，同一标签凑到 2 个、4 个触发质变</div>' +
       '<div class="k">事件</div><div class="v">路线里会撞上<a style="color:#b48ce0">遭遇</a>，每个选择都有代价</div>' +
       '<div class="k">残骸</div><div class="v">沉船也有收获，<b>永久</b>改装船队（解锁母舰 / 起始补给 / 祖传遗物）</div>' +
+      '<div class="k">异变</div><div class="v">每局开局抽一条<b>全局规则</b>（逆潮 / 丰饶 / 浓雾…），好坏都有，整局生效</div>' +
+      '<div class="k">刻度</div><div class="v">通关后解锁更高的<b>潮汐刻度</b>：敌人更强，残骸更多</div>' +
       '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
       '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
@@ -2978,8 +3099,22 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
           '<br><span style="color:#5f8ea4">甲板 ' + sp.cols.length + ' 列 · 木材 ' + sp.wood + ' · 耐久 ' + sp.hp + '</span></div>' +
           '</div>';
       }).join('') + '</div>' +
+      '<div class="ascrow">' +
+      '<button class="btn" id="ascDown">−</button>' +
+      '<span class="ascval">潮汐刻度 <b>' + (S.asc || 0) + '</b> · ' + D.ASC_NAME[S.asc || 0] +
+      '<span class="aschint">已解锁 ' + (S.meta.asc || 0) + ' / ' + D.MAX_ASC + '，通关后 +1</span></span>' +
+      '<button class="btn" id="ascUp">+</button>' +
+      '</div>' +
       '<div class="modal-actions"><button class="btn" id="btnDock">船坞</button></div>';
     openModal(html);
+    $('ascDown').addEventListener('click', function () {
+      S.asc = Math.max(0, (S.asc || 0) - 1);
+      showShipSelect();
+    });
+    $('ascUp').addEventListener('click', function () {
+      S.asc = Math.min(S.meta.asc || 0, (S.asc || 0) + 1);
+      showShipSelect();
+    });
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
       el.addEventListener('click', function () {
         var id = el.dataset.ship;
@@ -3006,7 +3141,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       wood: metaLv('wood'),
       hp: metaLv('hp'),
       relic: metaLv('relic') > 0
-    });
+    }, S.asc || 0);
     S.battle = null;
     S.phase = 'build';
     S.sel = null;
@@ -3093,11 +3228,14 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   /* ================= 启动 ================= */
   S.meta = loadMeta();
+  if (S.meta.asc === undefined) S.meta.asc = 0;
+  S.asc = S.meta.asc;
   buildPalette();
   syncUI();
   if (location.search.indexOf('nointro') >= 0) {
     S.started = true;
     closeModal();
+    syncUI();
     /* 调试：预置一套甲板，便于截图检查 */
     if (location.search.indexOf('demo') >= 0) {
       S.run.unlocked = [1, 2, 3, 4];
