@@ -38,6 +38,8 @@
       grid: new Array(COLS * ROWS).fill(null),
       unlocked: ship.cols.slice(),
       relics: [],
+      augments: [],
+      moduleAug: {},
       bonusHp: 0,
       stock: stock,
       up: up,
@@ -236,6 +238,23 @@
     var am = run.ascMods || { tide: 1 };
     st.tideMul *= am.tide;
 
+    /* --- 扩音改装：相邻武器射速加成 --- */
+    st.ampRate = {};
+    var augMap = run.moduleAug || {};
+    cells.forEach(function (x) {
+      var aid = augMap[x.c + '_' + x.r];
+      var ad = aid ? D.AUGMENTS[aid] : null;
+      if (!ad || !ad.aura) return;
+      cells.forEach(function (y) {
+        if (y.def.kind !== 'weapon') return;
+        if (y.c === x.c && y.r === x.r) return;
+        if (Math.abs(y.c - x.c) <= 1 && Math.abs(y.r - x.r) <= 1) {
+          var k = idx(y.c, y.r);
+          st.ampRate[k] = (st.ampRate[k] || 0) + ad.aura;
+        }
+      });
+    });
+
     /* --- 行为型遗物 --- */
     if (has('furnace')) { st.dmgMul *= 0.85; st.fireBurst = Math.max(st.fireBurst || 0, 25); }
     if (has('doubleedge')) { st.dmgMul *= 1.3; st.maxHp = Math.round(st.maxHp * 0.65); }
@@ -295,10 +314,32 @@
   function sell(run, col, row) {
     var id = run.grid[idx(col, row)];
     if (!id) return 0;
+    var key = col + '_' + row;
+    if (run.moduleAug && run.moduleAug[key]) {
+      run.augments.push(run.moduleAug[key]);
+      delete run.moduleAug[key];
+    }
     var refund = Math.floor(D.MODULES[id].cost * 0.5);
     run.wood += refund;
     run.grid[idx(col, row)] = null;
     return refund;
+  }
+
+  function grantAug(run, augId) {
+    if (D.AUGMENTS[augId]) run.augments.push(augId);
+  }
+
+  function applyAug(run, augId, col, row) {
+    var key = col + '_' + row;
+    var id = run.grid[idx(col, row)];
+    if (!id) return '这一格是空的';
+    if (D.MODULES[id].kind !== 'weapon') return '只能改装武器';
+    if (run.moduleAug[key]) return '这台已经改装过了';
+    var at = run.augments.indexOf(augId);
+    if (at < 0) return '没有这个改装件';
+    run.moduleAug[key] = augId;
+    run.augments.splice(at, 1);
+    return null;
   }
 
   function dive(run) {
@@ -364,6 +405,8 @@
           y: my(r),
           cd: 0,
           boosted: !!st.boost[r],
+          aug: (run.moduleAug && run.moduleAug[c + '_' + r]) ? D.AUGMENTS[run.moduleAug[c + '_' + r]] : null,
+          ampBonus: st.ampRate ? (st.ampRate[idx(c, r)] || 0) : 0,
           mag: st.mag[idx(c, r)] || 0,
           flooded: false,
           flash: 0
@@ -395,6 +438,7 @@
       r: def.r,
       latched: false,
       enraged: false,
+      burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
       bob: Math.random() * 6.283,
       hit: 0,
       dead: false,
@@ -476,7 +520,7 @@
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
       if (e.dead) continue;
-      if (lane !== 'any' && e.lane !== lane) continue;
+      if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
@@ -486,7 +530,8 @@
 
   function fire(b, m, target) {
     var lane = m.def.lane;
-    var dmg = m.def.dmg * (1 + m.mag) * b.st.dmgMul * (b.st.laneDmg[lane] || 1);
+    var aug = m.aug;
+    var dmg = m.def.dmg * (1 + m.mag) * b.st.dmgMul * (b.st.laneDmg[lane] || 1) * (aug && aug.dmg ? aug.dmg : 1);
     var hits = [];
     var i, e;
 
@@ -513,8 +558,35 @@
       hits.push(target);
     }
 
+    if (aug && aug.pierce) {
+      var extra = [];
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead || hits.indexOf(e) >= 0) continue;
+        if (e.lane !== target.lane) continue;
+        var pd = Math.abs(e.x - target.x);
+        if (pd <= 220) extra.push({ e: e, d: pd });
+      }
+      extra.sort(function (a, c) { return a.d - c.d; });
+      for (i = 0; i < extra.length && i < aug.pierce; i++) hits.push(extra[i].e);
+    }
+
+    if (aug && aug.splash) {
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead || hits.indexOf(e) >= 0) continue;
+        var sdx = e.x - target.x, sdy = e.y - target.y;
+        if (sdx * sdx + sdy * sdy <= aug.radius * aug.radius) {
+          hurt(b, e, dmg * aug.splash, '#e2703a', true);
+        }
+      }
+      b.blasts.push({ x: target.x, y: target.y, r: aug.radius, life: 0.22, max: 0.22, color: '#e2703a' });
+    }
+
     for (i = 0; i < hits.length; i++) {
       hurt(b, hits[i], dmg, m.def.color);
+      if (aug && aug.burn && !hits[i].dead) { hits[i].burnDps = aug.burn; hits[i].burnT = aug.burnT || 3; }
+      if (aug && aug.slow && !hits[i].dead) { hits[i].slowMul = aug.slow; hits[i].slowT = aug.slowT || 2; }
       b.tracers.push({
         x1: m.x, y1: m.y,
         x2: hits[i].x, y2: hits[i].y,
@@ -524,6 +596,9 @@
         w: m.def.chain ? 2.4 : 1.6,
         arc: !!m.def.chain
       });
+    }
+    if (aug && aug.recharge) {
+      for (i = 0; i < hits.length; i++) { if (hits[i].dead) { m.cd = 0; break; } }
     }
     m.flash = 0.1;
   }
@@ -571,9 +646,15 @@
       if (e.dead) continue;
       if (e.lane === 'surface') e.y = b.waterY - 10;
       if (e.hit > 0) e.hit -= dt;
+      if (e.burnT > 0) {
+        e.burnT -= dt;
+        hurt(b, e, e.burnDps * dt, '#e2703a', true);
+        if (e.dead) continue;
+      }
+      if (e.slowT > 0) e.slowT -= dt;
 
       if (!e.latched) {
-        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1);
+        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1);
         if (e.side === 'L') {
           e.x += spd * dt;
           if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
@@ -608,6 +689,8 @@
       var rate = b.st.rateMul;
       if (m.boosted) rate *= 1 / (b.st.boostMul || 1.2);
       if (m.flooded) rate *= 1.25;
+      if (m.ampBonus) rate *= 1 / (1 + m.ampBonus);
+      if (m.aug && m.aug.cd) rate *= m.aug.cd;
       m.cd = m.def.cd * rate;
       fire(b, m, target);
     }
@@ -714,6 +797,8 @@
       run.up[card.id] = (run.up[card.id] || 0) + 1;
     } else if (card.type === 'relic') {
       if ((run.relics || []).indexOf(card.id) < 0) run.relics.push(card.id);
+    } else if (card.type === 'augment') {
+      grantAug(run, card.id);
     } else if (card.type === 'wood') {
       run.wood += card.amt;
     } else if (card.type === 'repair') {
@@ -764,6 +849,11 @@
       run.stock[mid] = (run.stock[mid] || 0) + 1;
       got.push('模块「' + D.MODULES[mid].name + '」');
     }
+    if (eff.augment) {
+      var aid = D.AUG_ORDER[Math.floor(Math.random() * D.AUG_ORDER.length)];
+      grantAug(run, aid);
+      got.push('改装「' + D.AUGMENTS[aid].name + '」');
+    }
     if (eff.upgrade) {
       var ups = availableUpgrades(run);
       if (ups.length) {
@@ -796,6 +886,7 @@
     availableUpgrades: availableUpgrades, expandCost: expandCost, applyRoute: applyRoute,
     rollCards: rollCards, applyCard: applyCard,
     grantRelic: grantRelic, applyEvent: applyEvent, wreckageOf: wreckageOf,
+    grantAug: grantAug, applyAug: applyAug,
     edgeX: edgeX
   };
 })(typeof window !== 'undefined' ? window : globalThis);

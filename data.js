@@ -213,7 +213,7 @@
       id: 'beacon', name: '深海信标', icon: 'oil',
       text: '海底有个还在闪的信标，下面挂着一整箱没开封的货。',
       choices: [
-        { label: '打捞上来', desc: '+1 随机模块 +1 随机改造', eff: { module: 1, upgrade: 1 } },
+        { label: '打捞上来', desc: '+1 随机模块 +1 改装件', eff: { module: 1, augment: 1 } },
         { label: '不管它', desc: '+10 木材', eff: { wood: 10 } }
       ]
     },
@@ -242,8 +242,28 @@
     diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9', pts: 1.9 },
     shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a', pts: 2.8 },
     raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a', pts: 3.4 },
-    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 }
+    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 },
+
+    /* ---- 第二幕：深潮 ---- */
+    eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
+    shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
+    crab: { name: '深渊钳虫', lane: 'surface', hp: 220, spd: 30, dmg: 18, r: 27, color: '#b06a4a', pts: 4.2 },
+    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 56, color: '#c85fd0', boss: true, pts: 99 }
   };
+
+  /* ---------- 模块改装：挂到单台武器上的词条 ---------- */
+  var AUGMENTS = {
+    heavy: { name: '重弹', desc: '伤害 +45%，射速 -25%', dmg: 1.45, cd: 1.25, color: '#e0a458' },
+    rapid: { name: '连射', desc: '射速 +40%，伤害 -25%', dmg: 0.75, cd: 0.7, color: '#7fc8e8' },
+    splash: { name: '溅射', desc: '命中时对 55px 内敌人造成 35% 伤害', splash: 0.35, radius: 55, color: '#e2703a' },
+    pierce: { name: '穿透', desc: '额外命中同泳道后方 2 个目标', pierce: 2, color: '#f2e06b' },
+    burn: { name: '燃烧弹', desc: '命中附加 9/秒，持续 3 秒', burn: 9, burnT: 3, color: '#e2703a' },
+    frost: { name: '冷凝', desc: '命中减速 35%，持续 2 秒', slow: 0.65, slowT: 2, color: '#7fc8e8' },
+    elevate: { name: '高角', desc: '可打相邻泳道，伤害 -30%', cross: true, dmg: 0.7, color: '#9b8ae0' },
+    recharge: { name: '回充', desc: '击杀后立刻重置冷却', recharge: true, color: '#8fd14f' },
+    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' }
+  };
+  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp'];
 
   /* ---------- 潮汐词条：每波一个，逼你换打法 ---------- */
   var MODS = [
@@ -418,9 +438,11 @@
       id: 'assault', name: '强袭', tag: '危险', tone: 'risk',
       hpMul: 1.2, add: 1,
       desc: '敌方生命 +20%，多 1 个单位',
-      reward: upPool.length
-        ? { type: 'upgrade', id: randOf(upPool, 'ap') }
-        : { type: 'module', id: randOf(ORDER, 'ballista') }
+      reward: (function () {
+        if (rng() < 0.45) return { type: 'augment', id: AUG_ORDER[Math.floor(rng() * AUG_ORDER.length)] };
+        if (upPool.length) return { type: 'upgrade', id: randOf(upPool, 'ap') };
+        return { type: 'module', id: randOf(ORDER, 'ballista') };
+      })()
     };
     var elite = {
       id: 'elite', name: '精英潮', tag: '致命', tone: 'elite',
@@ -476,6 +498,7 @@
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
     MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META,
+    AUGMENTS: AUGMENTS, AUG_ORDER: AUG_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };

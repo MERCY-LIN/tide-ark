@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -21,7 +21,7 @@ html, body {
 
 #app {
   display: grid;
-  grid-template-rows: 52px 1fr 126px;
+  grid-template-rows: 52px 1fr auto;
   height: 100%;
 }
 
@@ -110,12 +110,28 @@ canvas#cv.placing { cursor: crosshair; }
 
 /* ---------------- 底部坞 ---------------- */
 #dock {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; flex-direction: column; gap: 7px;
   padding: 10px 16px;
   background: linear-gradient(#08131c, #0a1824);
   border-top: 1px solid #16293a;
   position: relative; z-index: 5;
 }
+
+#dockMain { display: flex; gap: 12px; width: 100%; align-items: center; }
+
+#augbar { display: none; gap: 7px; align-items: center; flex-wrap: wrap; }
+#augbar.on { display: flex; }
+#augbar .lbl { font-size: 11px; color: #5f8ea4; letter-spacing: 1px; margin-right: 2px; }
+.augchip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px 4px 6px; border-radius: 7px;
+  background: #12222f; border: 1px solid #23475c;
+  color: #b9d4e2; font-size: 12px; cursor: pointer;
+  font-family: inherit; transition: .12s;
+}
+.augchip:hover { border-color: #4a8fb0; background: #17334a; }
+.augchip.on { border-color: #ffcf8a; box-shadow: 0 0 0 1px #ffcf8a; color: #ffe9c4; }
+.augchip canvas { width: 20px; height: 20px; }
 
 #palette {
   display: flex; gap: 7px; flex: 1;
@@ -333,6 +349,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   </main>
 
   <footer id="dock">
+    <div id="augbar"></div>
+    <div id="dockMain">
     <div id="palette"></div>
     <div id="actions">
       <div class="row">
@@ -344,6 +362,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         <button class="btn" id="btnSpeed" style="display:none">1×</button>
         <button class="btn primary" id="btnTide">涨 潮 ▶</button>
       </div>
+    </div>
     </div>
   </footer>
 
@@ -570,7 +589,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       id: 'beacon', name: '深海信标', icon: 'oil',
       text: '海底有个还在闪的信标，下面挂着一整箱没开封的货。',
       choices: [
-        { label: '打捞上来', desc: '+1 随机模块 +1 随机改造', eff: { module: 1, upgrade: 1 } },
+        { label: '打捞上来', desc: '+1 随机模块 +1 改装件', eff: { module: 1, augment: 1 } },
         { label: '不管它', desc: '+10 木材', eff: { wood: 10 } }
       ]
     },
@@ -599,8 +618,28 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     diver: { name: '深潜者', lane: 'under', hp: 62, spd: 58, dmg: 7, r: 17, color: '#4fb3c9', pts: 1.9 },
     shellback: { name: '甲壳兽', lane: 'surface', hp: 100, spd: 38, dmg: 9, r: 23, color: '#a5744a', pts: 2.8 },
     raider: { name: '掠夺艇', lane: 'surface', hp: 140, spd: 50, dmg: 11, r: 24, color: '#c2564a', pts: 3.4 },
-    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 }
+    boss: { name: '潮汐巨兽', lane: 'surface', hp: 600, spd: 18, dmg: 14, r: 50, color: '#e0577f', boss: true, pts: 99 },
+
+    /* ---- 第二幕：深潮 ---- */
+    eel: { name: '电鳗', lane: 'under', hp: 70, spd: 92, dmg: 11, r: 15, color: '#5fe0d0', pts: 2.2 },
+    shade: { name: '幽影', lane: 'air', hp: 52, spd: 118, dmg: 9, r: 15, color: '#8f7fd4', pts: 2.1 },
+    crab: { name: '深渊钳虫', lane: 'surface', hp: 220, spd: 30, dmg: 18, r: 27, color: '#b06a4a', pts: 4.2 },
+    eye: { name: '潮汐之眼', lane: 'surface', hp: 1100, spd: 14, dmg: 22, r: 56, color: '#c85fd0', boss: true, pts: 99 }
   };
+
+  /* ---------- 模块改装：挂到单台武器上的词条 ---------- */
+  var AUGMENTS = {
+    heavy: { name: '重弹', desc: '伤害 +45%，射速 -25%', dmg: 1.45, cd: 1.25, color: '#e0a458' },
+    rapid: { name: '连射', desc: '射速 +40%，伤害 -25%', dmg: 0.75, cd: 0.7, color: '#7fc8e8' },
+    splash: { name: '溅射', desc: '命中时对 55px 内敌人造成 35% 伤害', splash: 0.35, radius: 55, color: '#e2703a' },
+    pierce: { name: '穿透', desc: '额外命中同泳道后方 2 个目标', pierce: 2, color: '#f2e06b' },
+    burn: { name: '燃烧弹', desc: '命中附加 9/秒，持续 3 秒', burn: 9, burnT: 3, color: '#e2703a' },
+    frost: { name: '冷凝', desc: '命中减速 35%，持续 2 秒', slow: 0.65, slowT: 2, color: '#7fc8e8' },
+    elevate: { name: '高角', desc: '可打相邻泳道，伤害 -30%', cross: true, dmg: 0.7, color: '#9b8ae0' },
+    recharge: { name: '回充', desc: '击杀后立刻重置冷却', recharge: true, color: '#8fd14f' },
+    amp: { name: '扩音', desc: '相邻模块射速 +12%', aura: 0.12, color: '#c9a227' }
+  };
+  var AUG_ORDER = ['heavy', 'rapid', 'splash', 'pierce', 'burn', 'frost', 'elevate', 'recharge', 'amp'];
 
   /* ---------- 潮汐词条：每波一个，逼你换打法 ---------- */
   var MODS = [
@@ -775,9 +814,11 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       id: 'assault', name: '强袭', tag: '危险', tone: 'risk',
       hpMul: 1.2, add: 1,
       desc: '敌方生命 +20%，多 1 个单位',
-      reward: upPool.length
-        ? { type: 'upgrade', id: randOf(upPool, 'ap') }
-        : { type: 'module', id: randOf(ORDER, 'ballista') }
+      reward: (function () {
+        if (rng() < 0.45) return { type: 'augment', id: AUG_ORDER[Math.floor(rng() * AUG_ORDER.length)] };
+        if (upPool.length) return { type: 'upgrade', id: randOf(upPool, 'ap') };
+        return { type: 'module', id: randOf(ORDER, 'ballista') };
+      })()
     };
     var elite = {
       id: 'elite', name: '精英潮', tag: '致命', tone: 'elite',
@@ -833,6 +874,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     TAGS: TAGS, TAG_ORDER: TAG_ORDER, TAG_OF: TAG_OF,
     MUTATIONS: MUTATIONS, MAX_ASC: MAX_ASC, ASC_NAME: ASC_NAME, ascMods: ascMods, makeMutation: makeMutation,
     EVENTS: EVENTS, META: META,
+    AUGMENTS: AUGMENTS, AUG_ORDER: AUG_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
     makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };
@@ -880,6 +922,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       grid: new Array(COLS * ROWS).fill(null),
       unlocked: ship.cols.slice(),
       relics: [],
+      augments: [],
+      moduleAug: {},
       bonusHp: 0,
       stock: stock,
       up: up,
@@ -1078,6 +1122,23 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     var am = run.ascMods || { tide: 1 };
     st.tideMul *= am.tide;
 
+    /* --- 扩音改装：相邻武器射速加成 --- */
+    st.ampRate = {};
+    var augMap = run.moduleAug || {};
+    cells.forEach(function (x) {
+      var aid = augMap[x.c + '_' + x.r];
+      var ad = aid ? D.AUGMENTS[aid] : null;
+      if (!ad || !ad.aura) return;
+      cells.forEach(function (y) {
+        if (y.def.kind !== 'weapon') return;
+        if (y.c === x.c && y.r === x.r) return;
+        if (Math.abs(y.c - x.c) <= 1 && Math.abs(y.r - x.r) <= 1) {
+          var k = idx(y.c, y.r);
+          st.ampRate[k] = (st.ampRate[k] || 0) + ad.aura;
+        }
+      });
+    });
+
     /* --- 行为型遗物 --- */
     if (has('furnace')) { st.dmgMul *= 0.85; st.fireBurst = Math.max(st.fireBurst || 0, 25); }
     if (has('doubleedge')) { st.dmgMul *= 1.3; st.maxHp = Math.round(st.maxHp * 0.65); }
@@ -1137,10 +1198,32 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   function sell(run, col, row) {
     var id = run.grid[idx(col, row)];
     if (!id) return 0;
+    var key = col + '_' + row;
+    if (run.moduleAug && run.moduleAug[key]) {
+      run.augments.push(run.moduleAug[key]);
+      delete run.moduleAug[key];
+    }
     var refund = Math.floor(D.MODULES[id].cost * 0.5);
     run.wood += refund;
     run.grid[idx(col, row)] = null;
     return refund;
+  }
+
+  function grantAug(run, augId) {
+    if (D.AUGMENTS[augId]) run.augments.push(augId);
+  }
+
+  function applyAug(run, augId, col, row) {
+    var key = col + '_' + row;
+    var id = run.grid[idx(col, row)];
+    if (!id) return '这一格是空的';
+    if (D.MODULES[id].kind !== 'weapon') return '只能改装武器';
+    if (run.moduleAug[key]) return '这台已经改装过了';
+    var at = run.augments.indexOf(augId);
+    if (at < 0) return '没有这个改装件';
+    run.moduleAug[key] = augId;
+    run.augments.splice(at, 1);
+    return null;
   }
 
   function dive(run) {
@@ -1206,6 +1289,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
           y: my(r),
           cd: 0,
           boosted: !!st.boost[r],
+          aug: (run.moduleAug && run.moduleAug[c + '_' + r]) ? D.AUGMENTS[run.moduleAug[c + '_' + r]] : null,
+          ampBonus: st.ampRate ? (st.ampRate[idx(c, r)] || 0) : 0,
           mag: st.mag[idx(c, r)] || 0,
           flooded: false,
           flash: 0
@@ -1237,6 +1322,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       r: def.r,
       latched: false,
       enraged: false,
+      burnT: 0, burnDps: 0, slowT: 0, slowMul: 1,
       bob: Math.random() * 6.283,
       hit: 0,
       dead: false,
@@ -1318,7 +1404,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     for (var i = 0; i < b.enemies.length; i++) {
       var e = b.enemies[i];
       if (e.dead) continue;
-      if (lane !== 'any' && e.lane !== lane) continue;
+      if (lane !== 'any' && e.lane !== lane && !(m.aug && m.aug.cross)) continue;
       if (Math.abs(e.x - m.x) > reach) continue;
       var score = e.latched ? -1e6 : Math.abs(e.x - edgeX(e.side));
       if (score < bestScore) { bestScore = score; best = e; }
@@ -1328,7 +1414,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
   function fire(b, m, target) {
     var lane = m.def.lane;
-    var dmg = m.def.dmg * (1 + m.mag) * b.st.dmgMul * (b.st.laneDmg[lane] || 1);
+    var aug = m.aug;
+    var dmg = m.def.dmg * (1 + m.mag) * b.st.dmgMul * (b.st.laneDmg[lane] || 1) * (aug && aug.dmg ? aug.dmg : 1);
     var hits = [];
     var i, e;
 
@@ -1355,8 +1442,35 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       hits.push(target);
     }
 
+    if (aug && aug.pierce) {
+      var extra = [];
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead || hits.indexOf(e) >= 0) continue;
+        if (e.lane !== target.lane) continue;
+        var pd = Math.abs(e.x - target.x);
+        if (pd <= 220) extra.push({ e: e, d: pd });
+      }
+      extra.sort(function (a, c) { return a.d - c.d; });
+      for (i = 0; i < extra.length && i < aug.pierce; i++) hits.push(extra[i].e);
+    }
+
+    if (aug && aug.splash) {
+      for (i = 0; i < b.enemies.length; i++) {
+        e = b.enemies[i];
+        if (e.dead || hits.indexOf(e) >= 0) continue;
+        var sdx = e.x - target.x, sdy = e.y - target.y;
+        if (sdx * sdx + sdy * sdy <= aug.radius * aug.radius) {
+          hurt(b, e, dmg * aug.splash, '#e2703a', true);
+        }
+      }
+      b.blasts.push({ x: target.x, y: target.y, r: aug.radius, life: 0.22, max: 0.22, color: '#e2703a' });
+    }
+
     for (i = 0; i < hits.length; i++) {
       hurt(b, hits[i], dmg, m.def.color);
+      if (aug && aug.burn && !hits[i].dead) { hits[i].burnDps = aug.burn; hits[i].burnT = aug.burnT || 3; }
+      if (aug && aug.slow && !hits[i].dead) { hits[i].slowMul = aug.slow; hits[i].slowT = aug.slowT || 2; }
       b.tracers.push({
         x1: m.x, y1: m.y,
         x2: hits[i].x, y2: hits[i].y,
@@ -1366,6 +1480,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         w: m.def.chain ? 2.4 : 1.6,
         arc: !!m.def.chain
       });
+    }
+    if (aug && aug.recharge) {
+      for (i = 0; i < hits.length; i++) { if (hits[i].dead) { m.cd = 0; break; } }
     }
     m.flash = 0.1;
   }
@@ -1413,9 +1530,15 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (e.dead) continue;
       if (e.lane === 'surface') e.y = b.waterY - 10;
       if (e.hit > 0) e.hit -= dt;
+      if (e.burnT > 0) {
+        e.burnT -= dt;
+        hurt(b, e, e.burnDps * dt, '#e2703a', true);
+        if (e.dead) continue;
+      }
+      if (e.slowT > 0) e.slowT -= dt;
 
       if (!e.latched) {
-        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1);
+        var spd = e.def.spd * (e.enraged ? 1.35 : 1) * (b.plan.spdMul || 1) * (e.slowT > 0 ? e.slowMul : 1);
         if (e.side === 'L') {
           e.x += spd * dt;
           if (e.x >= edgeX('L')) { e.x = edgeX('L'); e.latched = true; }
@@ -1450,6 +1573,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       var rate = b.st.rateMul;
       if (m.boosted) rate *= 1 / (b.st.boostMul || 1.2);
       if (m.flooded) rate *= 1.25;
+      if (m.ampBonus) rate *= 1 / (1 + m.ampBonus);
+      if (m.aug && m.aug.cd) rate *= m.aug.cd;
       m.cd = m.def.cd * rate;
       fire(b, m, target);
     }
@@ -1556,6 +1681,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       run.up[card.id] = (run.up[card.id] || 0) + 1;
     } else if (card.type === 'relic') {
       if ((run.relics || []).indexOf(card.id) < 0) run.relics.push(card.id);
+    } else if (card.type === 'augment') {
+      grantAug(run, card.id);
     } else if (card.type === 'wood') {
       run.wood += card.amt;
     } else if (card.type === 'repair') {
@@ -1606,6 +1733,11 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       run.stock[mid] = (run.stock[mid] || 0) + 1;
       got.push('模块「' + D.MODULES[mid].name + '」');
     }
+    if (eff.augment) {
+      var aid = D.AUG_ORDER[Math.floor(Math.random() * D.AUG_ORDER.length)];
+      grantAug(run, aid);
+      got.push('改装「' + D.AUGMENTS[aid].name + '」');
+    }
     if (eff.upgrade) {
       var ups = availableUpgrades(run);
       if (ups.length) {
@@ -1638,6 +1770,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     availableUpgrades: availableUpgrades, expandCost: expandCost, applyRoute: applyRoute,
     rollCards: rollCards, applyCard: applyCard,
     grantRelic: grantRelic, applyEvent: applyEvent, wreckageOf: wreckageOf,
+    grantAug: grantAug, applyAug: applyAug,
     edgeX: edgeX
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1670,6 +1803,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     t: 0,
     route: null,
     event: null,
+    selAug: null,
     started: false,
     log: []
   };
@@ -2017,6 +2151,12 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       ctx.fillStyle = 'rgba(255,255,255,' + (opt.flash * 4) + ')';
       ctx.fill();
     }
+    if (opt.augColor) {
+      ctx.beginPath();
+      ctx.arc(cx + half - 6, cy + half - 6, 2.6, 0, 6.283);
+      ctx.fillStyle = opt.augColor;
+      ctx.fill();
+    }
     if (opt.boosted) {
       ctx.beginPath();
       ctx.arc(cx + half - 6, cy - half + 6, 2.6, 0, 6.283);
@@ -2032,8 +2172,10 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         var id = S.run.grid[C.idx(c, r)];
         if (!id) continue;
         var def = D.MODULES[id];
+        var augKey = (S.run.moduleAug || {})[c + '_' + r];
         moduleVisual(g, def, D.RAFT_X + c * CELL + CELL / 2, D.RAFT_Y + r * CELL + CELL / 2 + bob, CELL - 10, {
-          boosted: st.boost[r] && def.kind === 'weapon'
+          boosted: st.boost[r] && def.kind === 'weapon',
+          augColor: augKey ? D.AUGMENTS[augKey].color : null
         });
       }
     }
@@ -2045,7 +2187,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       moduleVisual(g, m.def, m.x, m.y + bob, CELL - 10, {
         flash: m.flash,
         flooded: m.flooded,
-        boosted: m.boosted && m.def.kind === 'weapon'
+        boosted: m.boosted && m.def.kind === 'weapon',
+        augColor: m.aug ? m.aug.color : null
       });
     }
   }
@@ -2567,6 +2710,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     cv.classList.toggle('placing', !!S.sel && S.phase === 'build');
     var tb = S.battle && S.phase !== 'build' ? S.battle.tide : 0;
     $('tideFill').style.width = Math.round(tb * 100) + '%';
+    renderAugbar();
     updatePreview();
   }
 
@@ -2622,6 +2766,57 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     }
   }
 
+  /* ================= 改装件 ================= */
+  function drawAugIcon(ctx, cx, cy, s, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.72, 0, 6.283);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.08, -s * 0.45);
+    ctx.lineTo(-s * 0.22, s * 0.08);
+    ctx.lineTo(s * 0.12, s * 0.08);
+    ctx.lineTo(-s * 0.08, s * 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  var augSig = '';
+  function renderAugbar() {
+    var list = S.run.augments || [];
+    var sig = list.join(',') + '|' + (S.selAug || '') + '|' + S.phase;
+    if (sig === augSig) return;
+    augSig = sig;
+    var bar = $('augbar');
+    if (!list.length) {
+      bar.classList.remove('on');
+      bar.innerHTML = '';
+      return;
+    }
+    bar.classList.add('on');
+    var html = '<span class="lbl">改装件</span>';
+    list.forEach(function (id) {
+      var a = D.AUGMENTS[id];
+      html += '<button class="augchip' + (S.selAug === id ? ' on' : '') + '" data-aug="' + id + '" title="' +
+        a.desc + '">' + '<canvas width="20" height="20"></canvas><span>' + a.name + '</span></button>';
+    });
+    html += '<span style="font-size:11px;color:#3f6678;margin-left:6px">选中后点一台武器挂上去</span>';
+    bar.innerHTML = html;
+    Array.prototype.forEach.call(bar.querySelectorAll('.augchip'), function (el) {
+      var id = el.dataset.aug;
+      drawAugIcon(el.querySelector('canvas').getContext('2d'), 10, 10, 8, D.AUGMENTS[id].color);
+      el.addEventListener('click', function () {
+        if (S.phase !== 'build') return;
+        S.selAug = (S.selAug === id) ? null : id;
+        syncUI();
+      });
+    });
+  }
+
   /* ================= 提示气泡 ================= */
   function updateTip() {
     var tip = $('tip');
@@ -2637,9 +2832,14 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         '<div class="tc">' + (e ? e.cost + ' 木材' : '') + (reason ? ' · ' + reason : ' · 点击加固') + '</div>';
     } else if (id) {
       var def = D.MODULES[id];
+      var augOn = (S.run.moduleAug || {})[cell.col + '_' + cell.row];
+      var augTxt = augOn
+        ? '<div style="color:' + D.AUGMENTS[augOn].color + '">改装 · ' + D.AUGMENTS[augOn].name +
+          '：' + D.AUGMENTS[augOn].desc + '</div>'
+        : '';
       html = '<div class="tn" style="color:' + def.color + '">' + def.name + '</div>' +
-        '<div class="td">' + def.desc + '</div>' +
-        '<div class="tc">点击拆除（回收 ' + Math.floor(def.cost * 0.5) + ' 木材）</div>';
+        '<div class="td">' + def.desc + '</div>' + augTxt +
+        '<div class="tc">点击拆除（回收 ' + Math.floor(def.cost * 0.5) + ' 木材，改装件退回）</div>';
     } else if (S.sel) {
       var d2 = D.MODULES[S.sel];
       html = '<div class="tn" style="color:' + d2.color + '">放置：' + d2.name + '</div>' +
@@ -2699,6 +2899,18 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       var errE = C.expand(S.run, cell.col);
       if (errE) { toast(errE); return; }
       toast('加固成功：多了 3 个格子');
+      syncUI();
+      return;
+    }
+
+    if (S.selAug) {
+      var augId = S.selAug;
+      var targetId = S.run.grid[C.idx(cell.col, cell.row)];
+      if (!targetId) { toast('点一台武器来挂改装'); return; }
+      var aerr = C.applyAug(S.run, augId, cell.col, cell.row);
+      if (aerr) { toast(aerr); return; }
+      toast('改装完成：' + D.AUGMENTS[augId].name);
+      S.selAug = null;
       syncUI();
       return;
     }
@@ -2773,6 +2985,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     if (r.type === 'module') return '模块 · ' + D.MODULES[r.id].name;
     if (r.type === 'upgrade') return '改造 · ' + D.UPGRADES[r.id].name;
     if (r.type === 'relic') return '遗物 · ' + D.RELICS[r.id].name;
+    if (r.type === 'augment') return '改装 · ' + D.AUGMENTS[r.id].name;
     if (r.type === 'wood') return '木材 +' + r.amt;
     if (r.type === 'repair') return '修复 +' + r.amt;
     return '';
@@ -2782,6 +2995,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     if (!r) return 'none';
     if (r.type === 'module') return r.id;
     if (r.type === 'relic') return 'relic';
+    if (r.type === 'augment') return 'augment';
     if (r.type === 'upgrade') return 'upgrade';
     return r.type;
   }
@@ -2851,6 +3065,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
           ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
           ictx.stroke();
         }
+      } else if (key === 'augment') {
+        drawAugIcon(ictx, 22, 22, 13, '#f2e06b');
       } else if (key === 'ship') {
         ictx.strokeStyle = '#9dc4d6';
         ictx.lineWidth = 2.4;
@@ -3261,6 +3477,11 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
       if (location.search.indexOf('dock=1') >= 0) showDock();
       if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
+      if (location.search.indexOf('aug=1') >= 0) {
+        S.run.augments = ['pierce', 'burn', 'recharge'];
+        C.applyAug(S.run, 'splash', 1, 1);
+        syncUI();
+      }
       var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
       if (mShip) newGame(mShip[1]);
     }

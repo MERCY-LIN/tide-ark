@@ -24,6 +24,7 @@
     t: 0,
     route: null,
     event: null,
+    selAug: null,
     started: false,
     log: []
   };
@@ -371,6 +372,12 @@
       ctx.fillStyle = 'rgba(255,255,255,' + (opt.flash * 4) + ')';
       ctx.fill();
     }
+    if (opt.augColor) {
+      ctx.beginPath();
+      ctx.arc(cx + half - 6, cy + half - 6, 2.6, 0, 6.283);
+      ctx.fillStyle = opt.augColor;
+      ctx.fill();
+    }
     if (opt.boosted) {
       ctx.beginPath();
       ctx.arc(cx + half - 6, cy - half + 6, 2.6, 0, 6.283);
@@ -386,8 +393,10 @@
         var id = S.run.grid[C.idx(c, r)];
         if (!id) continue;
         var def = D.MODULES[id];
+        var augKey = (S.run.moduleAug || {})[c + '_' + r];
         moduleVisual(g, def, D.RAFT_X + c * CELL + CELL / 2, D.RAFT_Y + r * CELL + CELL / 2 + bob, CELL - 10, {
-          boosted: st.boost[r] && def.kind === 'weapon'
+          boosted: st.boost[r] && def.kind === 'weapon',
+          augColor: augKey ? D.AUGMENTS[augKey].color : null
         });
       }
     }
@@ -399,7 +408,8 @@
       moduleVisual(g, m.def, m.x, m.y + bob, CELL - 10, {
         flash: m.flash,
         flooded: m.flooded,
-        boosted: m.boosted && m.def.kind === 'weapon'
+        boosted: m.boosted && m.def.kind === 'weapon',
+        augColor: m.aug ? m.aug.color : null
       });
     }
   }
@@ -921,6 +931,7 @@
     cv.classList.toggle('placing', !!S.sel && S.phase === 'build');
     var tb = S.battle && S.phase !== 'build' ? S.battle.tide : 0;
     $('tideFill').style.width = Math.round(tb * 100) + '%';
+    renderAugbar();
     updatePreview();
   }
 
@@ -976,6 +987,57 @@
     }
   }
 
+  /* ================= 改装件 ================= */
+  function drawAugIcon(ctx, cx, cy, s, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.72, 0, 6.283);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.08, -s * 0.45);
+    ctx.lineTo(-s * 0.22, s * 0.08);
+    ctx.lineTo(s * 0.12, s * 0.08);
+    ctx.lineTo(-s * 0.08, s * 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  var augSig = '';
+  function renderAugbar() {
+    var list = S.run.augments || [];
+    var sig = list.join(',') + '|' + (S.selAug || '') + '|' + S.phase;
+    if (sig === augSig) return;
+    augSig = sig;
+    var bar = $('augbar');
+    if (!list.length) {
+      bar.classList.remove('on');
+      bar.innerHTML = '';
+      return;
+    }
+    bar.classList.add('on');
+    var html = '<span class="lbl">改装件</span>';
+    list.forEach(function (id) {
+      var a = D.AUGMENTS[id];
+      html += '<button class="augchip' + (S.selAug === id ? ' on' : '') + '" data-aug="' + id + '" title="' +
+        a.desc + '">' + '<canvas width="20" height="20"></canvas><span>' + a.name + '</span></button>';
+    });
+    html += '<span style="font-size:11px;color:#3f6678;margin-left:6px">选中后点一台武器挂上去</span>';
+    bar.innerHTML = html;
+    Array.prototype.forEach.call(bar.querySelectorAll('.augchip'), function (el) {
+      var id = el.dataset.aug;
+      drawAugIcon(el.querySelector('canvas').getContext('2d'), 10, 10, 8, D.AUGMENTS[id].color);
+      el.addEventListener('click', function () {
+        if (S.phase !== 'build') return;
+        S.selAug = (S.selAug === id) ? null : id;
+        syncUI();
+      });
+    });
+  }
+
   /* ================= 提示气泡 ================= */
   function updateTip() {
     var tip = $('tip');
@@ -991,9 +1053,14 @@
         '<div class="tc">' + (e ? e.cost + ' 木材' : '') + (reason ? ' · ' + reason : ' · 点击加固') + '</div>';
     } else if (id) {
       var def = D.MODULES[id];
+      var augOn = (S.run.moduleAug || {})[cell.col + '_' + cell.row];
+      var augTxt = augOn
+        ? '<div style="color:' + D.AUGMENTS[augOn].color + '">改装 · ' + D.AUGMENTS[augOn].name +
+          '：' + D.AUGMENTS[augOn].desc + '</div>'
+        : '';
       html = '<div class="tn" style="color:' + def.color + '">' + def.name + '</div>' +
-        '<div class="td">' + def.desc + '</div>' +
-        '<div class="tc">点击拆除（回收 ' + Math.floor(def.cost * 0.5) + ' 木材）</div>';
+        '<div class="td">' + def.desc + '</div>' + augTxt +
+        '<div class="tc">点击拆除（回收 ' + Math.floor(def.cost * 0.5) + ' 木材，改装件退回）</div>';
     } else if (S.sel) {
       var d2 = D.MODULES[S.sel];
       html = '<div class="tn" style="color:' + d2.color + '">放置：' + d2.name + '</div>' +
@@ -1053,6 +1120,18 @@
       var errE = C.expand(S.run, cell.col);
       if (errE) { toast(errE); return; }
       toast('加固成功：多了 3 个格子');
+      syncUI();
+      return;
+    }
+
+    if (S.selAug) {
+      var augId = S.selAug;
+      var targetId = S.run.grid[C.idx(cell.col, cell.row)];
+      if (!targetId) { toast('点一台武器来挂改装'); return; }
+      var aerr = C.applyAug(S.run, augId, cell.col, cell.row);
+      if (aerr) { toast(aerr); return; }
+      toast('改装完成：' + D.AUGMENTS[augId].name);
+      S.selAug = null;
       syncUI();
       return;
     }
@@ -1127,6 +1206,7 @@
     if (r.type === 'module') return '模块 · ' + D.MODULES[r.id].name;
     if (r.type === 'upgrade') return '改造 · ' + D.UPGRADES[r.id].name;
     if (r.type === 'relic') return '遗物 · ' + D.RELICS[r.id].name;
+    if (r.type === 'augment') return '改装 · ' + D.AUGMENTS[r.id].name;
     if (r.type === 'wood') return '木材 +' + r.amt;
     if (r.type === 'repair') return '修复 +' + r.amt;
     return '';
@@ -1136,6 +1216,7 @@
     if (!r) return 'none';
     if (r.type === 'module') return r.id;
     if (r.type === 'relic') return 'relic';
+    if (r.type === 'augment') return 'augment';
     if (r.type === 'upgrade') return 'upgrade';
     return r.type;
   }
@@ -1205,6 +1286,8 @@
           ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
           ictx.stroke();
         }
+      } else if (key === 'augment') {
+        drawAugIcon(ictx, 22, 22, 13, '#f2e06b');
       } else if (key === 'ship') {
         ictx.strokeStyle = '#9dc4d6';
         ictx.lineWidth = 2.4;
@@ -1615,6 +1698,11 @@
       if (location.search.indexOf('win=1') >= 0) { S.phase = 'victory'; showVictory(); }
       if (location.search.indexOf('dock=1') >= 0) showDock();
       if (location.search.indexOf('event=1') >= 0) { S.route = { cleared: 1 }; showEvent(D.EVENTS[0]); }
+      if (location.search.indexOf('aug=1') >= 0) {
+        S.run.augments = ['pierce', 'burn', 'recharge'];
+        C.applyAug(S.run, 'splash', 1, 1);
+        syncUI();
+      }
       var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
       if (mShip) newGame(mShip[1]);
     }

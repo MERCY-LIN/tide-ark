@@ -14,7 +14,7 @@ html, body {
 
 #app {
   display: grid;
-  grid-template-rows: 52px 1fr 126px;
+  grid-template-rows: 52px 1fr auto;
   height: 100%;
 }
 
@@ -103,12 +103,28 @@ canvas#cv.placing { cursor: crosshair; }
 
 /* ---------------- 底部坞 ---------------- */
 #dock {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; flex-direction: column; gap: 7px;
   padding: 10px 16px;
   background: linear-gradient(#08131c, #0a1824);
   border-top: 1px solid #16293a;
   position: relative; z-index: 5;
 }
+
+#dockMain { display: flex; gap: 12px; width: 100%; align-items: center; }
+
+#augbar { display: none; gap: 7px; align-items: center; flex-wrap: wrap; }
+#augbar.on { display: flex; }
+#augbar .lbl { font-size: 11px; color: #5f8ea4; letter-spacing: 1px; margin-right: 2px; }
+.augchip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px 4px 6px; border-radius: 7px;
+  background: #12222f; border: 1px solid #23475c;
+  color: #b9d4e2; font-size: 12px; cursor: pointer;
+  font-family: inherit; transition: .12s;
+}
+.augchip:hover { border-color: #4a8fb0; background: #17334a; }
+.augchip.on { border-color: #ffcf8a; box-shadow: 0 0 0 1px #ffcf8a; color: #ffe9c4; }
+.augchip canvas { width: 20px; height: 20px; }
 
 #palette {
   display: flex; gap: 7px; flex: 1;
