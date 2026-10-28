@@ -27,6 +27,9 @@
 | **推荐** | `standalone.html` | 单个 HTML，约 159 KB，双击即玩，断网可用 |
 | 开发 | `index.html` | 拆分版（`style.css` + `data.js` + `core.js` + `app.js`） |
 
+窗口自适应：画布固定 2:1，按可用空间等比缩放；顶栏、卡牌、按钮在 1180 / 920 / 620 像素和
+760 / 640 像素高度上逐级收缩。实测 1440×900 到 500×800 都能完整操作。
+
 ```bash
 node tools/build-standalone.js   # 重新生成单文件版
 ```

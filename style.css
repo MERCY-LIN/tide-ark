@@ -14,7 +14,8 @@ html, body {
 
 #app {
   display: grid;
-  grid-template-rows: 52px 1fr auto;
+  grid-template-rows: 52px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -76,12 +77,14 @@ html, body {
 #stage {
   position: relative;
   display: flex; align-items: center; justify-content: center;
-  padding: 10px; min-height: 0;
+  padding: 10px; min-height: 0; min-width: 0; overflow: hidden;
   background: radial-gradient(ellipse at 50% 0%, #0d2130 0%, #05090d 70%);
 }
 canvas#cv {
   display: block;
   max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  touch-action: none;
   border-radius: 12px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, .75), 0 0 0 1px #14293a;
   cursor: default;
@@ -94,7 +97,7 @@ canvas#cv.placing { cursor: crosshair; }
   background: rgba(8, 20, 29, .82);
   border: 1px solid #1d3a4d;
   font-size: 12px; line-height: 1.7; color: #9dc4d6;
-  pointer-events: none; max-width: 380px;
+  pointer-events: none; max-width: min(380px, 46vw);
   backdrop-filter: blur(3px);
 }
 #preview .k { color: #6fa3ba; }
@@ -127,12 +130,13 @@ canvas#cv.placing { cursor: crosshair; }
 .augchip canvas { width: 20px; height: 20px; }
 
 #palette {
-  display: flex; gap: 7px; flex: 1;
+  display: flex; gap: 7px; flex: 1; min-width: 0;
   overflow-x: auto; overflow-y: hidden;
   padding-bottom: 2px;
   scrollbar-width: thin;
 }
 #palette::-webkit-scrollbar { height: 6px; }
+#palette::-webkit-scrollbar-track { background: #0a1721; border-radius: 3px; }
 #palette::-webkit-scrollbar-thumb { background: #1d3a4d; border-radius: 3px; }
 
 .card {
@@ -353,3 +357,54 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 .achrow.got .ar { color: #8ff0c4; }
 .achlist.two { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 @media (max-width: 620px) { .achlist.two { grid-template-columns: 1fr; } }
+/* ---------------- 自适应 ---------------- */
+@media (max-width: 1180px) {
+  .card { flex: 0 0 70px; width: 70px; height: 92px; }
+  .card canvas { width: 28px; height: 28px; }
+  .card .nm { font-size: 11px; }
+  #preview { font-size: 11px; padding: 6px 10px; }
+}
+
+@media (max-width: 920px) {
+  #hud { gap: 8px; padding: 0 10px; }
+  .brand { font-size: 15px; letter-spacing: 2px; }
+  .brand em { display: none; }
+  .chip { padding: 4px 9px; font-size: 12px; }
+  .chip .lbl { font-size: 11px; }
+  .bar { width: 64px; }
+  .card { flex: 0 0 62px; width: 62px; height: 84px; padding: 5px 3px 3px; gap: 1px; }
+  .card canvas { width: 24px; height: 24px; }
+  .card .nm { font-size: 10px; }
+  .card .cost { font-size: 10px; }
+  #dock { padding: 8px 10px; gap: 6px; }
+  #actions .btn { padding: 7px 11px; font-size: 12px; }
+  #preview { font-size: 10.5px; left: 12px; top: 10px; line-height: 1.6; }
+  .augchip { padding: 3px 8px 3px 5px; font-size: 11px; }
+}
+
+@media (max-height: 760px) {
+  .card { height: 84px; }
+  #dock { padding: 8px 14px 8px; }
+  #preview { max-height: 46vh; overflow: hidden; }
+}
+
+@media (max-height: 640px) {
+  .card { height: 74px; }
+  .card canvas { width: 22px; height: 22px; }
+  .card .cost { display: none; }
+  #hud { height: 44px; }
+}
+@media (max-width: 620px) {
+  .chip.tide, #phaseTag { display: none; }
+  .brand { font-size: 13px; letter-spacing: 1px; }
+  .brand em { display: none; }
+  .chip { padding: 3px 7px; font-size: 11px; }
+  .bar { width: 48px; }
+  #preview { max-width: 64vw; font-size: 10px; padding: 5px 8px; }
+  #dock { padding: 6px 8px; }
+  #actions .btn { padding: 6px 9px; font-size: 11px; }
+  .card { flex: 0 0 56px; width: 56px; height: 76px; }
+  .card canvas { width: 20px; height: 20px; }
+  .card .nm { font-size: 9.5px; }
+  .card .cost { display: none; }
+}
