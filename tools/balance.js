@@ -140,17 +140,16 @@ function buildPhase(run) {
   }
 }
 
-function pickCard(run, cards) {
+function pickRoute(run, opts) {
   const st = C.computeStats(run);
-  if (run.hp < st.maxHp * 0.45) {
-    const rep = cards.find(c => c.type === 'repair');
-    if (rep) return rep;
-  }
-  const up = cards.find(c => c.type === 'upgrade');
-  if (up && Math.random() < 0.7) return up;
-  const mods = cards.filter(c => c.type === 'module');
-  if (mods.length) return mods[0];
-  return cards.find(c => c.type === 'wood') || cards[0];
+  const hpFrac = run.hp / st.maxHp;
+  const safe = opts.find(o => o.tone === 'safe');
+  const elite = opts.find(o => o.tone === 'elite');
+  const risk = opts.find(o => o.tone === 'risk');
+  if (hpFrac < 0.45 && safe) return safe;
+  if (elite && hpFrac > 0.62) return elite;
+  if (risk) return risk;
+  return opts[0];
 }
 
 function dumpBoard(run, w) {
@@ -182,7 +181,8 @@ function logBattle(b) {
 
 /* ---------- 单局 ---------- */
 function playOne(log) {
-  const run = C.newRun(12345 + (log ? 0 : Math.floor(Math.random() * 1e6)));
+  const ship = ['barge', 'gunboat', 'carrier'][Math.floor(Math.random() * 3)];
+  const run = C.newRun(12345 + (log ? 0 : Math.floor(Math.random() * 1e6)), ship);
   const trace = [];
 
   for (let w = 1; w <= D.MAX_WAVE; w++) {
@@ -229,11 +229,12 @@ function playOne(log) {
     const gain = C.afterWave(run, b);
     if (w >= D.MAX_WAVE) return { won: true, wave: w, trace, run, battle: b, gain };
 
-    const cards = C.rollCards(run);
-    C.applyCard(run, pickCard(run, cards));
+    const opts = D.makeRoute(run, Math.random);
+    const opt = pickRoute(run, opts);
 
     run.wave = w + 1;
     run.dived = false;
+    C.applyRoute(run, opt);
     C.planWave(run);
   }
   return { won: true, wave: D.MAX_WAVE, trace, run };

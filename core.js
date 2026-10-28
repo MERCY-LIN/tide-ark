@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark  v0.2
    core.js —— 甲板扩建 / 建造 / 潮汐战斗，纯逻辑，零 DOM 依赖
    ============================================================ */
@@ -16,19 +16,23 @@
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed) {
+  function newRun(seed, shipId) {
     var stock = {};
     D.ORDER.forEach(function (id) { stock[id] = 0; });
     var up = {};
     D.UPGRADE_ORDER.forEach(function (id) { up[id] = 0; });
 
+    var ship = D.SHIPS[shipId] || D.SHIPS.barge;
     var run = {
       seed: seed || (Math.random() * 1e9) | 0,
+      ship: shipId || 'barge',
       wave: 1,
-      wood: 46,
-      hp: 160,
+      wood: ship.wood,
+      hp: ship.hp,
+      baseHp: ship.hp,
       grid: new Array(COLS * ROWS).fill(null),
-      unlocked: D.START_COLS.slice(),
+      unlocked: ship.cols.slice(),
+      relics: [],
       bonusHp: 0,
       stock: stock,
       up: up,
@@ -37,17 +41,44 @@
       over: false,
       won: false,
       kills: 0,
+      pending: null,
       plan: null
     };
     run.rng = D.mulberry32(run.seed);
+    if (ship.perk === 'stock') {
+      for (var i = 0; i < 2; i++) {
+        var mid = D.ORDER[Math.floor(Math.random() * D.ORDER.length)];
+        run.stock[mid] = (run.stock[mid] || 0) + 1;
+      }
+    }
     planWave(run);
     return run;
   }
 
   function planWave(run) {
-    run.plan = D.makePlan(run.wave, run.rng);
+    var plan = D.makePlan(run.wave, run.rng);
+    if (run.pending) {
+      plan.hpMul *= run.pending.hpMul;
+      var pool = ['drifter'];
+      if (run.wave >= 3) pool.push('bat');
+      if (run.wave >= 5) pool.push('diver');
+      if (run.wave >= 6) pool.push('shellback');
+      for (var i = 0; i < (run.pending.add || 0); i++) {
+        plan.spawns.push({ kind: pool[Math.floor(run.rng() * pool.length)], side: run.rng() < 0.5 ? 'L' : 'R' });
+      }
+      var n = plan.spawns.length;
+      var t0 = 1.4, t1 = plan.dur * 0.46;
+      plan.spawns.forEach(function (e, ix) {
+        e.t = n <= 1 ? t0 : t0 + (t1 - t0) * (ix / (n - 1));
+      });
+      var sides = {};
+      plan.spawns.forEach(function (e) { sides[e.side] = true; });
+      plan.sides = Object.keys(sides).sort();
+      run.pending = null;
+    }
     run.extraDivers = 0;
-    return run.plan;
+    run.plan = plan;
+    return plan;
   }
 
   /* ============================================================
@@ -62,12 +93,19 @@
     return isUnlocked(run, col - 1) || isUnlocked(run, col + 1);
   }
 
+  function expandCost(run, col) {
+    var e = expandDef(col);
+    if (!e) return 0;
+    var mul = (run.relics || []).indexOf('blueprint') >= 0 ? 0.6 : 1;
+    return Math.round(e.cost * mul);
+  }
+
   function canExpand(run, col) {
     var e = expandDef(col);
     if (!e) return '这一列不能扩建';
     if (isUnlocked(run, col)) return '已经加固过了';
     if (!adjacentUnlocked(run, col)) return '要先加固相邻的列';
-    if (run.wood < e.cost) return '木材不足（需要 ' + e.cost + '）';
+    if (run.wood < expandCost(run, col)) return '木材不足（需要 ' + expandCost(run, col) + '）';
     return null;
   }
 
@@ -75,7 +113,7 @@
     var err = canExpand(run, col);
     if (err) return err;
     var e = expandDef(col);
-    run.wood -= e.cost;
+    run.wood -= expandCost(run, col);
     run.unlocked.push(col);
     run.bonusHp += e.hp;
     run.hp += e.hp;
@@ -100,7 +138,7 @@
   function computeStats(run) {
     var up = run.up || {};
     var st = {
-      maxHp: 160 + (run.bonusHp || 0),
+      maxHp: (run.baseHp || 160) + (run.bonusHp || 0),
       tideMul: 1,
       boost: [false, false, false],
       mag: {},
@@ -110,9 +148,30 @@
       rateMul: Math.max(0.6, 1 - 0.12 * (up.loader || 0)),
       rangeBonus: (up.barrel || 0),
       laneDmg: { surface: 1, air: 1 + 0.35 * (up.aa || 0), under: 1 + 0.35 * (up.asw || 0), any: 1 },
-      repairPerWave: 10 * (up.patch || 0)
+      repairPerWave: 10 * (up.patch || 0),
+      magEach: 0.25,
+      magCap: 0.5
     };
     var cells = cellsOf(run);
+
+    /* --- 起始船被动 --- */
+    var ship = D.SHIPS[run.ship] || D.SHIPS.barge;
+    if (ship.perk === 'dmg') st.dmgMul *= 1.25;
+
+    /* --- 遗物 --- */
+    var R = run.relics || [];
+    var has = function (k) { return R.indexOf(k) >= 0; };
+    if (has('searchlight')) st.rangeBonus += 1;
+    if (has('ram')) st.maxHp += 60;
+    if (has('autoloader')) st.rateMul *= 0.87;
+    if (has('ap')) st.dmgMul *= 1.15;
+    if (has('net')) st.salvage += 15;
+    if (has('depthrack')) st.laneDmg.under += 0.4;
+    if (has('radar')) st.laneDmg.air += 0.4;
+    if (has('bilge')) st.tideMul *= 0.85;
+    if (has('spares')) st.repairPerWave += 15;
+    if (has('twin')) { st.magEach = 0.5; st.magCap = 0.75; }
+    if (has('blueprint')) st.expandMul = 0.6;
 
     cells.forEach(function (x) {
       var e = x.def.effect;
@@ -131,7 +190,7 @@
       cells.forEach(function (y) {
         if (y.def.effect === 'mag' && Math.abs(y.c - x.c) <= 1 && Math.abs(y.r - x.r) <= 1) m++;
       });
-      st.mag[idx(x.c, x.r)] = Math.min(0.5, m * 0.25);
+      st.mag[idx(x.c, x.r)] = Math.min(st.magCap, m * st.magEach);
     });
 
     return st;
@@ -215,6 +274,7 @@
       log: [],
       seq: 1,
       result: null,
+      tideChild: (run.relics || []).indexOf('tidechild') >= 0,
       enraged: false,
       killed: 0,
       dmgDealt: 0,
@@ -397,8 +457,8 @@
       b.tide = Math.min(1, b.tide + (dt / b.tideDur) * b.tideMul);
       if (b.tide >= 1 && !b.enraged) {
         b.enraged = true;
-        b.enemies.forEach(function (e) { e.enraged = true; });
-        pushLog(b, '满潮 · 敌群狂暴，船舱开始进水');
+        if (!b.tideChild) b.enemies.forEach(function (e) { e.enraged = true; });
+        pushLog(b, b.tideChild ? '满潮 · 船舱开始进水（潮汐之子：敌群没有狂暴）' : '满潮 · 敌群狂暴，船舱开始进水');
         floatText(b, D.VIEW_W / 2, 118, '满 潮 · 敌 群 狂 暴', '#ff8b6b', 26);
         floatText(b, D.VIEW_W / 2, 148, '海水开始灌进船舱', '#7fc8e8', 15);
       }
@@ -569,12 +629,21 @@
       run.stock[card.id] = (run.stock[card.id] || 0) + 1;
     } else if (card.type === 'upgrade') {
       run.up[card.id] = (run.up[card.id] || 0) + 1;
+    } else if (card.type === 'relic') {
+      if ((run.relics || []).indexOf(card.id) < 0) run.relics.push(card.id);
     } else if (card.type === 'wood') {
       run.wood += card.amt;
     } else if (card.type === 'repair') {
       var max = computeStats(run).maxHp;
       run.hp = Math.min(max, run.hp + card.amt);
     }
+  }
+
+  /* 选定下一段路线：记下难度修正，并立刻发放奖励 */
+  function applyRoute(run, opt) {
+    run.pending = { hpMul: opt.hpMul || 1, add: opt.add || 0 };
+    if (opt.reward) applyCard(run, opt.reward);
+    return run.pending;
   }
 
   root.Core = {
@@ -586,7 +655,7 @@
     costOf: costOf, canPlace: canPlace, place: place, sell: sell, dive: dive,
     startBattle: startBattle, step: step,
     rewardWood: rewardWood, afterWave: afterWave,
-    availableUpgrades: availableUpgrades,
+    availableUpgrades: availableUpgrades, expandCost: expandCost, applyRoute: applyRoute,
     rollCards: rollCards, applyCard: applyCard,
     edgeX: edgeX
   };

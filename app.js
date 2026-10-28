@@ -22,7 +22,7 @@
     speed: 1,
     endTimer: 0,
     t: 0,
-    reward: null,
+    route: null,
     started: false,
     log: []
   };
@@ -904,10 +904,16 @@
       var modLine = pv.mod
         ? '<div class="warn">词条 · ' + pv.mod.name + '：' + pv.mod.desc + '</div>'
         : '<div class="k">本波无词条</div>';
+      var rl = S.run.relics || [];
+      var relicLine = rl.length
+        ? '<div style="color:#f2e06b">遗物：' + rl.map(function (k) { return D.RELICS[k].name; }).join(' · ') + '</div>'
+        : '';
+      var shipName = D.SHIPS[S.run.ship] ? D.SHIPS[S.run.ship].name : '';
       el.innerHTML =
-        '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b></div>' +
+        '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b>' +
+        '<span style="color:#5f8ea4"> 《' + shipName + '》</span></div>' +
         '<div class="k">来袭：' + pv.text + '</div>' +
-        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine;
+        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -1053,73 +1059,67 @@
 
     if (cleared >= D.MAX_WAVE) { S.phase = 'victory'; showVictory(); return; }
 
-    S.reward = {
-      cards: C.rollCards(S.run),
+    S.route = {
+      options: D.makeRoute(S.run, Math.random),
       wood: gain.wood,
       heal: gain.heal,
       cleared: cleared,
       kills: b.killed
     };
     S.run.wave = cleared + 1;
-    C.planWave(S.run);
-    S.phase = 'reward';
-    showReward();
+    S.phase = 'route';
+    showRoute();
   }
 
-  function cardHTML(card, i) {
-    if (card.type === 'module') {
-      var def = D.MODULES[card.id];
-      return '<div class="pick" data-i="' + i + '">' +
-        '<span class="pt">模块</span>' +
-        '<canvas data-icon="' + card.id + '" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:' + def.color + '">' + def.name + '</div>' +
-        '<div class="pd">' + def.desc + '</div>' +
-        '</div>';
-    }
-    if (card.type === 'upgrade') {
-      var u = D.UPGRADES[card.id];
-      var lvl = S.run.up[card.id] || 0;
-      return '<div class="pick" data-i="' + i + '">' +
-        '<span class="pt">改造</span>' +
-        '<canvas data-icon="upgrade" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:#f2e06b">' + u.name + '</div>' +
-        '<div class="pd">' + u.desc + '<br><span style="color:#5f8ea4">Lv.' + lvl + ' → ' + (lvl + 1) + '' +
-        (lvl + 1 >= u.max ? '（满）' : '') + '</span></div>' +
-        '</div>';
-    }
-    if (card.type === 'wood') {
-      return '<div class="pick big" data-i="' + i + '">' +
-        '<span class="pt">补给</span>' +
-        '<canvas data-icon="wood" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:#e8c07a">木材 +' + card.amt + '</div>' +
-        '<div class="pd">从漂浮的残骸里拖回来的建材</div>' +
-        '</div>';
-    }
-    return '<div class="pick big" data-i="' + i + '">' +
-      '<span class="pt">修整</span>' +
-      '<canvas data-icon="repair" width="44" height="44"></canvas>' +
-      '<div class="pn" style="color:#86e0b0">修复 +' + card.amt + '</div>' +
-      '<div class="pd">把漏水的舱室补一补</div>' +
+  function rewardText(r) {
+    if (!r) return '无奖励';
+    if (r.type === 'module') return '模块 · ' + D.MODULES[r.id].name;
+    if (r.type === 'upgrade') return '改造 · ' + D.UPGRADES[r.id].name;
+    if (r.type === 'relic') return '遗物 · ' + D.RELICS[r.id].name;
+    if (r.type === 'wood') return '木材 +' + r.amt;
+    if (r.type === 'repair') return '修复 +' + r.amt;
+    return '';
+  }
+
+  function routeIconFor(r) {
+    if (!r) return 'none';
+    if (r.type === 'module') return r.id;
+    if (r.type === 'relic') return 'relic';
+    if (r.type === 'upgrade') return 'upgrade';
+    return r.type;
+  }
+
+  var TONE = { safe: '#86e0b0', mid: '#7fc8e8', risk: '#ffcf8a', elite: '#ff8b6b' };
+
+  function routeCardHTML(opt, i) {
+    var tone = TONE[opt.tone] || '#9dc4d6';
+    return '<div class="pick" data-i="' + i + '">' +
+      '<span class="pt" style="color:' + tone + ';border-color:' + tone + '">' + opt.tag + '</span>' +
+      '<canvas data-icon="' + routeIconFor(opt.reward) + '" width="44" height="44"></canvas>' +
+      '<div class="pn" style="color:' + tone + '">' + opt.name + '</div>' +
+      '<div class="pd">' + opt.desc + '<br><span style="color:#e8c07a">' + rewardText(opt.reward) + '</span></div>' +
       '</div>';
   }
 
-  function showReward() {
-    var r = S.reward;
+  function showRoute() {
+    var r = S.route;
     var html = '<h2>第 ' + r.cleared + ' 次潮汐 · 退去</h2>' +
       '<div class="sub">击杀 ' + r.kills + ' · 木材 +' + r.wood + ' · 修复 +' + r.heal + '</div>' +
-      '<p>潮水退去，海面上浮起一些东西。<span class="hl">挑一件带走。</span></p>' +
-      '<div class="picks">' + r.cards.map(cardHTML).join('') + '</div>';
+      '<p>下一次潮汐已经在酝酿。<span class="hl">你要迎哪一场？</span></p>' +
+      '<div class="picks">' + r.options.map(routeCardHTML).join('') + '</div>' +
+      '<p class="hintline">难度越高，奖励越好 —— 但你只能选一场。</p>';
     openModal(html);
-
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
-      el.addEventListener('click', function () {
-        var i = parseInt(el.dataset.i, 10);
-        pickCard(i);
-      });
+      el.addEventListener('click', function () { pickRoute(parseInt(el.dataset.i, 10)); });
     });
+    paintPickIcons();
+  }
+
+  function paintPickIcons() {
     Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
       var key = cnv.dataset.icon;
       var ictx = cnv.getContext('2d');
+      var i;
       if (key === 'wood') {
         ictx.fillStyle = '#a97b46';
         rr(ictx, 8, 14, 28, 12, 3); ictx.fill();
@@ -1132,34 +1132,46 @@
         ictx.moveTo(22, 8); ictx.lineTo(22, 36);
         ictx.moveTo(8, 22); ictx.lineTo(36, 22);
         ictx.stroke();
+      } else if (key === 'relic') {
+        ictx.fillStyle = '#f2e06b';
+        ictx.beginPath();
+        ictx.moveTo(22, 6); ictx.lineTo(34, 22); ictx.lineTo(22, 38); ictx.lineTo(10, 22);
+        ictx.closePath(); ictx.fill();
+        ictx.fillStyle = '#0f1e2a';
+        ictx.beginPath();
+        ictx.moveTo(22, 14); ictx.lineTo(28, 22); ictx.lineTo(22, 30); ictx.lineTo(16, 22);
+        ictx.closePath(); ictx.fill();
       } else if (key === 'upgrade') {
         ictx.strokeStyle = '#f2e06b';
         ictx.lineWidth = 2.4;
         ictx.beginPath();
         ictx.arc(22, 22, 9, 0, Math.PI * 2);
         ictx.stroke();
-        for (var a = 0; a < 6; a++) {
-          var ang = a * Math.PI / 3;
+        for (i = 0; i < 6; i++) {
+          var ang = i * Math.PI / 3;
           ictx.beginPath();
           ictx.moveTo(22 + Math.cos(ang) * 10, 22 + Math.sin(ang) * 10);
           ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
           ictx.stroke();
         }
-      } else {
+      } else if (key !== 'none') {
         var d = D.MODULES[key];
-        drawIcon(ictx, d.icon, 22, 22, 14, d.color);
+        if (d) drawIcon(ictx, d.icon, 22, 22, 14, d.color);
       }
     });
   }
 
-  function pickCard(i) {
-    if (!S.reward) return;
-    C.applyCard(S.run, S.reward.cards[i]);
-    S.reward = null;
+  function pickRoute(i) {
+    if (!S.route) return;
+    var opt = S.route.options[i];
+    if (!opt) return;
+    S.route = null;
     closeModal();
+    C.applyRoute(S.run, opt);
+    C.planWave(S.run);
+    toast('迎战「' + opt.name + '」 · ' + rewardText(opt.reward));
     enterBuild();
   }
-
   function enterBuild() {
     S.phase = 'build';
     S.sel = null;
@@ -1192,7 +1204,7 @@
       '</div>' +
       '<div class="modal-actions"><button class="btn primary" id="btnRetry">再来一次</button></div>';
     openModal(html);
-    $('btnRetry').addEventListener('click', function () { newGame(); });
+    $('btnRetry').addEventListener('click', function () { showShipSelect(); });
   }
 
   function showVictory() {
@@ -1206,7 +1218,7 @@
       '</div>' +
       '<div class="modal-actions"><button class="btn primary" id="btnAgain">再漂一次</button></div>';
     openModal(html);
-    $('btnAgain').addEventListener('click', function () { newGame(); });
+    $('btnAgain').addEventListener('click', function () { showShipSelect(); });
   }
 
   function showHelp(first) {
@@ -1220,24 +1232,56 @@
       '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。没加固外侧列，就够不着远处的敌人</div>' +
       '<div class="k">射程</div><div class="v">射程按<b>列</b>算。靠边的炮更能覆盖自己这一侧</div>' +
       '<div class="k">潮汐词条</div><div class="v">每波可能带一个词条（<b>浓雾/蜂群/血月</b>…），会直接改这波的打法</div>' +
+      '<div class="k">路线</div><div class="v">每波结束<b>二选一/三选一</b>：难度是明牌，奖励也是明牌，但不能都要</div>' +
+      '<div class="k">遗物</div><div class="v">精英潮掉落，<b>整局改变规则</b>（探照灯 / 潮汐之子 / 扩建图纸…）</div>' +
       '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
       '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
       '<div class="modal-actions"><button class="btn primary" id="btnStart">' + (first ? '启 航' : '返 回') + '</button></div>';
     openModal(html);
     $('btnStart').addEventListener('click', function () {
-      if (first) { closeModal(); S.started = true; newGame(); }
+      if (first) { closeModal(); S.started = true; showShipSelect(); }
       else closeModal();
     });
   }
 
-  function newGame() {
-    S.run = C.newRun();
+  function showShipSelect() {
+    var html = '<h2>选择你的船</h2>' +
+      '<div class="sub">这一局的起点不一样，能走的路也不一样</div>' +
+      '<div class="picks">' + D.SHIP_ORDER.map(function (id) {
+        var sp = D.SHIPS[id];
+        return '<div class="pick" data-ship="' + id + '">' +
+          '<span class="pt">起点</span>' +
+          '<canvas width="44" height="44"></canvas>' +
+          '<div class="pn" style="color:' + sp.color + '">' + sp.name + '</div>' +
+          '<div class="pd">' + sp.desc +
+          '<br><span style="color:#5f8ea4">甲板 ' + sp.cols.length + ' 列 · 木材 ' + sp.wood + ' · 耐久 ' + sp.hp + '</span></div>' +
+          '</div>';
+      }).join('') + '</div>';
+    openModal(html);
+    Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
+      el.addEventListener('click', function () { newGame(el.dataset.ship); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
+      var ictx = cnv.getContext('2d');
+      ictx.strokeStyle = '#9dc4d6';
+      ictx.lineWidth = 2.4;
+      ictx.beginPath();
+      ictx.moveTo(5, 27); ictx.lineTo(39, 27); ictx.lineTo(32, 37); ictx.lineTo(12, 37);
+      ictx.closePath(); ictx.stroke();
+      ictx.beginPath(); ictx.moveTo(22, 7); ictx.lineTo(22, 27); ictx.stroke();
+      ictx.beginPath(); ictx.moveTo(22, 9); ictx.lineTo(34, 23); ictx.lineTo(22, 23);
+      ictx.closePath(); ictx.stroke();
+    });
+  }
+
+  function newGame(shipId) {
+    S.run = C.newRun(undefined, shipId || 'barge');
     S.battle = null;
     S.phase = 'build';
     S.sel = null;
     S.started = true;
-    S.reward = null;
+    S.route = null;
     closeModal();
     syncUI();
   }
@@ -1339,6 +1383,9 @@
         resolveBattle();
       }
       syncUI();
+      if (location.search.indexOf('select') >= 0) showShipSelect();
+      var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
+      if (mShip) newGame(mShip[1]);
     }
   } else {
     showHelp(true);

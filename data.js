@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    潮汐方舟  Tide Ark  v0.2
    data.js —— 纯数值与内容表（无 DOM 依赖）
    ============================================================ */
@@ -106,6 +106,43 @@
     patch: { name: '维修班', desc: '每波开始修复 +10 耐久', max: 3 }
   };
   var UPGRADE_ORDER = ['barrel', 'ap', 'loader', 'hull', 'salvager', 'aa', 'asw', 'tide', 'patch'];
+
+  /* ---------- 起始船：每局开局三选一 ---------- */
+  var SHIPS = {
+    barge: {
+      name: '驳船', cols: [1, 2, 3, 4], wood: 38, hp: 200,
+      perk: 'none', color: '#9aa5b1',
+      desc: '甲板宽、血厚，但穷。稳扎稳打'
+    },
+    gunboat: {
+      name: '炮艇', cols: [2, 3], wood: 56, hp: 140,
+      perk: 'dmg', color: '#e0a458',
+      desc: '甲板窄、血薄，但所有武器伤害 +25%'
+    },
+    carrier: {
+      name: '母舰', cols: [2, 3, 4], wood: 44, hp: 170,
+      perk: 'stock', color: '#7fc8e8',
+      desc: '开局白送 2 个随机模块（放进库存）'
+    }
+  };
+  var SHIP_ORDER = ['barge', 'gunboat', 'carrier'];
+
+  /* ---------- 遗物：整局生效的规则改变 ---------- */
+  var RELICS = {
+    searchlight: { name: '探照灯', desc: '所有武器射程 +1 列' },
+    ram: { name: '铁甲船首', desc: '耐久上限 +60' },
+    autoloader: { name: '自动装填', desc: '所有武器射速 +15%' },
+    ap: { name: '穿甲弹', desc: '所有武器伤害 +15%' },
+    net: { name: '打捞网', desc: '每波结束 +15 木材' },
+    depthrack: { name: '深水弹架', desc: '对潜伤害 +40%' },
+    radar: { name: '雷达', desc: '对空伤害 +40%' },
+    bilge: { name: '排水泵', desc: '潮水上涌速度 -15%' },
+    spares: { name: '备用零件', desc: '每波开始修复 +15' },
+    twin: { name: '双联装', desc: '弹药库加成 +25%' },
+    tidechild: { name: '潮汐之子', desc: '满潮时敌人不再狂暴（仍会进水）' },
+    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' }
+  };
+  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint'];
 
   /* ---------- 敌人 ---------- */
   var ENEMIES = {
@@ -223,9 +260,60 @@
     };
   }
 
+  /* ---------- 路线：每波结束后二选一 / 三选一 ----------
+     每个选项 = 下一波的难度 + 一份看得见的奖励。
+     选项是明牌的：你知道会多难，也知道能拿到什么，只是不能都要。 */
+  function makeRoute(run, rng) {
+    var upPool = UPGRADE_ORDER.filter(function (k) {
+      return (run.up[k] || 0) < UPGRADES[k].max;
+    });
+    var owned = run.relics || [];
+    var relicPool = RELIC_ORDER.filter(function (k) { return owned.indexOf(k) < 0; });
+
+    function randOf(arr, fb) {
+      if (!arr.length) return fb;
+      return arr[Math.floor(rng() * arr.length)];
+    }
+
+    var calm = {
+      id: 'calm', name: '平静潮汐', tag: '安全', tone: 'safe',
+      hpMul: 0.82, add: 0,
+      desc: '敌方生命 -18%',
+      reward: rng() < 0.5
+        ? { type: 'wood', amt: 32 + run.wave * 4 }
+        : { type: 'repair', amt: 28 + run.wave * 3 }
+    };
+    var normal = {
+      id: 'normal', name: '寻常潮汐', tag: '常规', tone: 'mid',
+      hpMul: 1, add: 0,
+      desc: '标准强度',
+      reward: { type: 'module', id: randOf(ORDER, 'ballista') }
+    };
+    var assault = {
+      id: 'assault', name: '强袭', tag: '危险', tone: 'risk',
+      hpMul: 1.2, add: 1,
+      desc: '敌方生命 +20%，多 1 个单位',
+      reward: upPool.length
+        ? { type: 'upgrade', id: randOf(upPool, 'ap') }
+        : { type: 'module', id: randOf(ORDER, 'ballista') }
+    };
+    var elite = {
+      id: 'elite', name: '精英潮', tag: '致命', tone: 'elite',
+      hpMul: 1.38, add: 2,
+      desc: '敌方生命 +38%，多 2 个单位',
+      reward: relicPool.length
+        ? { type: 'relic', id: randOf(relicPool, 'ram') }
+        : { type: 'upgrade', id: randOf(upPool, 'ap') || { type: 'wood', amt: 40 } }
+    };
+
+    var opts = [calm];
+    opts.push(rng() < 0.55 ? assault : normal);
+    if (run.wave >= 2 && relicPool.length) opts.push(elite);
+    return opts;
+  }
+
   function previewOf(plan) {
-    var count = {};
-    plan.spawns.forEach(function (s) {
+    var count = {};    plan.spawns.forEach(function (s) {
       count[s.kind] = (count[s.kind] || 0) + 1;
     });
     var parts = [];
@@ -248,7 +336,9 @@
     START_COLS: START_COLS, EXPAND: EXPAND,
     MODULES: MODULES, ORDER: ORDER,
     UPGRADES: UPGRADES, UPGRADE_ORDER: UPGRADE_ORDER,
+    SHIPS: SHIPS, SHIP_ORDER: SHIP_ORDER,
+    RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
-    makePlan: makePlan, previewOf: previewOf, mulberry32: mulberry32
+    makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };
 })(typeof window !== 'undefined' ? window : globalThis);

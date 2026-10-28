@@ -321,7 +321,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
 <script>
 /* ==== data.js ==== */
-﻿/* ============================================================
+/* ============================================================
    潮汐方舟  Tide Ark  v0.2
    data.js —— 纯数值与内容表（无 DOM 依赖）
    ============================================================ */
@@ -429,6 +429,43 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     patch: { name: '维修班', desc: '每波开始修复 +10 耐久', max: 3 }
   };
   var UPGRADE_ORDER = ['barrel', 'ap', 'loader', 'hull', 'salvager', 'aa', 'asw', 'tide', 'patch'];
+
+  /* ---------- 起始船：每局开局三选一 ---------- */
+  var SHIPS = {
+    barge: {
+      name: '驳船', cols: [1, 2, 3, 4], wood: 38, hp: 200,
+      perk: 'none', color: '#9aa5b1',
+      desc: '甲板宽、血厚，但穷。稳扎稳打'
+    },
+    gunboat: {
+      name: '炮艇', cols: [2, 3], wood: 56, hp: 140,
+      perk: 'dmg', color: '#e0a458',
+      desc: '甲板窄、血薄，但所有武器伤害 +25%'
+    },
+    carrier: {
+      name: '母舰', cols: [2, 3, 4], wood: 44, hp: 170,
+      perk: 'stock', color: '#7fc8e8',
+      desc: '开局白送 2 个随机模块（放进库存）'
+    }
+  };
+  var SHIP_ORDER = ['barge', 'gunboat', 'carrier'];
+
+  /* ---------- 遗物：整局生效的规则改变 ---------- */
+  var RELICS = {
+    searchlight: { name: '探照灯', desc: '所有武器射程 +1 列' },
+    ram: { name: '铁甲船首', desc: '耐久上限 +60' },
+    autoloader: { name: '自动装填', desc: '所有武器射速 +15%' },
+    ap: { name: '穿甲弹', desc: '所有武器伤害 +15%' },
+    net: { name: '打捞网', desc: '每波结束 +15 木材' },
+    depthrack: { name: '深水弹架', desc: '对潜伤害 +40%' },
+    radar: { name: '雷达', desc: '对空伤害 +40%' },
+    bilge: { name: '排水泵', desc: '潮水上涌速度 -15%' },
+    spares: { name: '备用零件', desc: '每波开始修复 +15' },
+    twin: { name: '双联装', desc: '弹药库加成 +25%' },
+    tidechild: { name: '潮汐之子', desc: '满潮时敌人不再狂暴（仍会进水）' },
+    blueprint: { name: '扩建图纸', desc: '加固甲板费用 -40%' }
+  };
+  var RELIC_ORDER = ['searchlight', 'ram', 'autoloader', 'ap', 'net', 'depthrack', 'radar', 'bilge', 'spares', 'twin', 'tidechild', 'blueprint'];
 
   /* ---------- 敌人 ---------- */
   var ENEMIES = {
@@ -546,9 +583,60 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     };
   }
 
+  /* ---------- 路线：每波结束后二选一 / 三选一 ----------
+     每个选项 = 下一波的难度 + 一份看得见的奖励。
+     选项是明牌的：你知道会多难，也知道能拿到什么，只是不能都要。 */
+  function makeRoute(run, rng) {
+    var upPool = UPGRADE_ORDER.filter(function (k) {
+      return (run.up[k] || 0) < UPGRADES[k].max;
+    });
+    var owned = run.relics || [];
+    var relicPool = RELIC_ORDER.filter(function (k) { return owned.indexOf(k) < 0; });
+
+    function randOf(arr, fb) {
+      if (!arr.length) return fb;
+      return arr[Math.floor(rng() * arr.length)];
+    }
+
+    var calm = {
+      id: 'calm', name: '平静潮汐', tag: '安全', tone: 'safe',
+      hpMul: 0.82, add: 0,
+      desc: '敌方生命 -18%',
+      reward: rng() < 0.5
+        ? { type: 'wood', amt: 32 + run.wave * 4 }
+        : { type: 'repair', amt: 28 + run.wave * 3 }
+    };
+    var normal = {
+      id: 'normal', name: '寻常潮汐', tag: '常规', tone: 'mid',
+      hpMul: 1, add: 0,
+      desc: '标准强度',
+      reward: { type: 'module', id: randOf(ORDER, 'ballista') }
+    };
+    var assault = {
+      id: 'assault', name: '强袭', tag: '危险', tone: 'risk',
+      hpMul: 1.2, add: 1,
+      desc: '敌方生命 +20%，多 1 个单位',
+      reward: upPool.length
+        ? { type: 'upgrade', id: randOf(upPool, 'ap') }
+        : { type: 'module', id: randOf(ORDER, 'ballista') }
+    };
+    var elite = {
+      id: 'elite', name: '精英潮', tag: '致命', tone: 'elite',
+      hpMul: 1.38, add: 2,
+      desc: '敌方生命 +38%，多 2 个单位',
+      reward: relicPool.length
+        ? { type: 'relic', id: randOf(relicPool, 'ram') }
+        : { type: 'upgrade', id: randOf(upPool, 'ap') || { type: 'wood', amt: 40 } }
+    };
+
+    var opts = [calm];
+    opts.push(rng() < 0.55 ? assault : normal);
+    if (run.wave >= 2 && relicPool.length) opts.push(elite);
+    return opts;
+  }
+
   function previewOf(plan) {
-    var count = {};
-    plan.spawns.forEach(function (s) {
+    var count = {};    plan.spawns.forEach(function (s) {
       count[s.kind] = (count[s.kind] || 0) + 1;
     });
     var parts = [];
@@ -571,14 +659,16 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     START_COLS: START_COLS, EXPAND: EXPAND,
     MODULES: MODULES, ORDER: ORDER,
     UPGRADES: UPGRADES, UPGRADE_ORDER: UPGRADE_ORDER,
+    SHIPS: SHIPS, SHIP_ORDER: SHIP_ORDER,
+    RELICS: RELICS, RELIC_ORDER: RELIC_ORDER,
     ENEMIES: ENEMIES, MODS: MODS, MAX_WAVE: MAX_WAVE,
-    makePlan: makePlan, previewOf: previewOf, mulberry32: mulberry32
+    makePlan: makePlan, makeRoute: makeRoute, previewOf: previewOf, mulberry32: mulberry32
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
 /* ==== core.js ==== */
-/* ============================================================
+﻿/* ============================================================
    潮汐方舟  Tide Ark  v0.2
    core.js —— 甲板扩建 / 建造 / 潮汐战斗，纯逻辑，零 DOM 依赖
    ============================================================ */
@@ -596,19 +686,23 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   /* ============================================================
      一局
      ============================================================ */
-  function newRun(seed) {
+  function newRun(seed, shipId) {
     var stock = {};
     D.ORDER.forEach(function (id) { stock[id] = 0; });
     var up = {};
     D.UPGRADE_ORDER.forEach(function (id) { up[id] = 0; });
 
+    var ship = D.SHIPS[shipId] || D.SHIPS.barge;
     var run = {
       seed: seed || (Math.random() * 1e9) | 0,
+      ship: shipId || 'barge',
       wave: 1,
-      wood: 46,
-      hp: 160,
+      wood: ship.wood,
+      hp: ship.hp,
+      baseHp: ship.hp,
       grid: new Array(COLS * ROWS).fill(null),
-      unlocked: D.START_COLS.slice(),
+      unlocked: ship.cols.slice(),
+      relics: [],
       bonusHp: 0,
       stock: stock,
       up: up,
@@ -617,17 +711,44 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       over: false,
       won: false,
       kills: 0,
+      pending: null,
       plan: null
     };
     run.rng = D.mulberry32(run.seed);
+    if (ship.perk === 'stock') {
+      for (var i = 0; i < 2; i++) {
+        var mid = D.ORDER[Math.floor(Math.random() * D.ORDER.length)];
+        run.stock[mid] = (run.stock[mid] || 0) + 1;
+      }
+    }
     planWave(run);
     return run;
   }
 
   function planWave(run) {
-    run.plan = D.makePlan(run.wave, run.rng);
+    var plan = D.makePlan(run.wave, run.rng);
+    if (run.pending) {
+      plan.hpMul *= run.pending.hpMul;
+      var pool = ['drifter'];
+      if (run.wave >= 3) pool.push('bat');
+      if (run.wave >= 5) pool.push('diver');
+      if (run.wave >= 6) pool.push('shellback');
+      for (var i = 0; i < (run.pending.add || 0); i++) {
+        plan.spawns.push({ kind: pool[Math.floor(run.rng() * pool.length)], side: run.rng() < 0.5 ? 'L' : 'R' });
+      }
+      var n = plan.spawns.length;
+      var t0 = 1.4, t1 = plan.dur * 0.46;
+      plan.spawns.forEach(function (e, ix) {
+        e.t = n <= 1 ? t0 : t0 + (t1 - t0) * (ix / (n - 1));
+      });
+      var sides = {};
+      plan.spawns.forEach(function (e) { sides[e.side] = true; });
+      plan.sides = Object.keys(sides).sort();
+      run.pending = null;
+    }
     run.extraDivers = 0;
-    return run.plan;
+    run.plan = plan;
+    return plan;
   }
 
   /* ============================================================
@@ -642,12 +763,19 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     return isUnlocked(run, col - 1) || isUnlocked(run, col + 1);
   }
 
+  function expandCost(run, col) {
+    var e = expandDef(col);
+    if (!e) return 0;
+    var mul = (run.relics || []).indexOf('blueprint') >= 0 ? 0.6 : 1;
+    return Math.round(e.cost * mul);
+  }
+
   function canExpand(run, col) {
     var e = expandDef(col);
     if (!e) return '这一列不能扩建';
     if (isUnlocked(run, col)) return '已经加固过了';
     if (!adjacentUnlocked(run, col)) return '要先加固相邻的列';
-    if (run.wood < e.cost) return '木材不足（需要 ' + e.cost + '）';
+    if (run.wood < expandCost(run, col)) return '木材不足（需要 ' + expandCost(run, col) + '）';
     return null;
   }
 
@@ -655,7 +783,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     var err = canExpand(run, col);
     if (err) return err;
     var e = expandDef(col);
-    run.wood -= e.cost;
+    run.wood -= expandCost(run, col);
     run.unlocked.push(col);
     run.bonusHp += e.hp;
     run.hp += e.hp;
@@ -680,7 +808,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
   function computeStats(run) {
     var up = run.up || {};
     var st = {
-      maxHp: 160 + (run.bonusHp || 0),
+      maxHp: (run.baseHp || 160) + (run.bonusHp || 0),
       tideMul: 1,
       boost: [false, false, false],
       mag: {},
@@ -690,9 +818,30 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       rateMul: Math.max(0.6, 1 - 0.12 * (up.loader || 0)),
       rangeBonus: (up.barrel || 0),
       laneDmg: { surface: 1, air: 1 + 0.35 * (up.aa || 0), under: 1 + 0.35 * (up.asw || 0), any: 1 },
-      repairPerWave: 10 * (up.patch || 0)
+      repairPerWave: 10 * (up.patch || 0),
+      magEach: 0.25,
+      magCap: 0.5
     };
     var cells = cellsOf(run);
+
+    /* --- 起始船被动 --- */
+    var ship = D.SHIPS[run.ship] || D.SHIPS.barge;
+    if (ship.perk === 'dmg') st.dmgMul *= 1.25;
+
+    /* --- 遗物 --- */
+    var R = run.relics || [];
+    var has = function (k) { return R.indexOf(k) >= 0; };
+    if (has('searchlight')) st.rangeBonus += 1;
+    if (has('ram')) st.maxHp += 60;
+    if (has('autoloader')) st.rateMul *= 0.87;
+    if (has('ap')) st.dmgMul *= 1.15;
+    if (has('net')) st.salvage += 15;
+    if (has('depthrack')) st.laneDmg.under += 0.4;
+    if (has('radar')) st.laneDmg.air += 0.4;
+    if (has('bilge')) st.tideMul *= 0.85;
+    if (has('spares')) st.repairPerWave += 15;
+    if (has('twin')) { st.magEach = 0.5; st.magCap = 0.75; }
+    if (has('blueprint')) st.expandMul = 0.6;
 
     cells.forEach(function (x) {
       var e = x.def.effect;
@@ -711,7 +860,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       cells.forEach(function (y) {
         if (y.def.effect === 'mag' && Math.abs(y.c - x.c) <= 1 && Math.abs(y.r - x.r) <= 1) m++;
       });
-      st.mag[idx(x.c, x.r)] = Math.min(0.5, m * 0.25);
+      st.mag[idx(x.c, x.r)] = Math.min(st.magCap, m * st.magEach);
     });
 
     return st;
@@ -795,6 +944,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       log: [],
       seq: 1,
       result: null,
+      tideChild: (run.relics || []).indexOf('tidechild') >= 0,
       enraged: false,
       killed: 0,
       dmgDealt: 0,
@@ -977,8 +1127,8 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       b.tide = Math.min(1, b.tide + (dt / b.tideDur) * b.tideMul);
       if (b.tide >= 1 && !b.enraged) {
         b.enraged = true;
-        b.enemies.forEach(function (e) { e.enraged = true; });
-        pushLog(b, '满潮 · 敌群狂暴，船舱开始进水');
+        if (!b.tideChild) b.enemies.forEach(function (e) { e.enraged = true; });
+        pushLog(b, b.tideChild ? '满潮 · 船舱开始进水（潮汐之子：敌群没有狂暴）' : '满潮 · 敌群狂暴，船舱开始进水');
         floatText(b, D.VIEW_W / 2, 118, '满 潮 · 敌 群 狂 暴', '#ff8b6b', 26);
         floatText(b, D.VIEW_W / 2, 148, '海水开始灌进船舱', '#7fc8e8', 15);
       }
@@ -1149,12 +1299,21 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       run.stock[card.id] = (run.stock[card.id] || 0) + 1;
     } else if (card.type === 'upgrade') {
       run.up[card.id] = (run.up[card.id] || 0) + 1;
+    } else if (card.type === 'relic') {
+      if ((run.relics || []).indexOf(card.id) < 0) run.relics.push(card.id);
     } else if (card.type === 'wood') {
       run.wood += card.amt;
     } else if (card.type === 'repair') {
       var max = computeStats(run).maxHp;
       run.hp = Math.min(max, run.hp + card.amt);
     }
+  }
+
+  /* 选定下一段路线：记下难度修正，并立刻发放奖励 */
+  function applyRoute(run, opt) {
+    run.pending = { hpMul: opt.hpMul || 1, add: opt.add || 0 };
+    if (opt.reward) applyCard(run, opt.reward);
+    return run.pending;
   }
 
   root.Core = {
@@ -1166,7 +1325,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     costOf: costOf, canPlace: canPlace, place: place, sell: sell, dive: dive,
     startBattle: startBattle, step: step,
     rewardWood: rewardWood, afterWave: afterWave,
-    availableUpgrades: availableUpgrades,
+    availableUpgrades: availableUpgrades, expandCost: expandCost, applyRoute: applyRoute,
     rollCards: rollCards, applyCard: applyCard,
     edgeX: edgeX
   };
@@ -1198,7 +1357,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
     speed: 1,
     endTimer: 0,
     t: 0,
-    reward: null,
+    route: null,
     started: false,
     log: []
   };
@@ -2080,10 +2239,16 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       var modLine = pv.mod
         ? '<div class="warn">词条 · ' + pv.mod.name + '：' + pv.mod.desc + '</div>'
         : '<div class="k">本波无词条</div>';
+      var rl = S.run.relics || [];
+      var relicLine = rl.length
+        ? '<div style="color:#f2e06b">遗物：' + rl.map(function (k) { return D.RELICS[k].name; }).join(' · ') + '</div>'
+        : '';
+      var shipName = D.SHIPS[S.run.ship] ? D.SHIPS[S.run.ship].name : '';
       el.innerHTML =
-        '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b></div>' +
+        '<div><span class="k">第 ' + S.run.wave + ' 次潮汐</span> · <b>' + pv.sides + '</b>' +
+        '<span style="color:#5f8ea4"> 《' + shipName + '》</span></div>' +
         '<div class="k">来袭：' + pv.text + '</div>' +
-        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine;
+        '<div class="k">泳道：' + laneTxt.join(' · ') + '</div>' + modLine + relicLine;
     } else if (S.battle) {
       var mb = S.battle.mod ? ' · <span class="warn">' + S.battle.mod.name + '</span>' : '';
       el.innerHTML =
@@ -2229,73 +2394,67 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
 
     if (cleared >= D.MAX_WAVE) { S.phase = 'victory'; showVictory(); return; }
 
-    S.reward = {
-      cards: C.rollCards(S.run),
+    S.route = {
+      options: D.makeRoute(S.run, Math.random),
       wood: gain.wood,
       heal: gain.heal,
       cleared: cleared,
       kills: b.killed
     };
     S.run.wave = cleared + 1;
-    C.planWave(S.run);
-    S.phase = 'reward';
-    showReward();
+    S.phase = 'route';
+    showRoute();
   }
 
-  function cardHTML(card, i) {
-    if (card.type === 'module') {
-      var def = D.MODULES[card.id];
-      return '<div class="pick" data-i="' + i + '">' +
-        '<span class="pt">模块</span>' +
-        '<canvas data-icon="' + card.id + '" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:' + def.color + '">' + def.name + '</div>' +
-        '<div class="pd">' + def.desc + '</div>' +
-        '</div>';
-    }
-    if (card.type === 'upgrade') {
-      var u = D.UPGRADES[card.id];
-      var lvl = S.run.up[card.id] || 0;
-      return '<div class="pick" data-i="' + i + '">' +
-        '<span class="pt">改造</span>' +
-        '<canvas data-icon="upgrade" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:#f2e06b">' + u.name + '</div>' +
-        '<div class="pd">' + u.desc + '<br><span style="color:#5f8ea4">Lv.' + lvl + ' → ' + (lvl + 1) + '' +
-        (lvl + 1 >= u.max ? '（满）' : '') + '</span></div>' +
-        '</div>';
-    }
-    if (card.type === 'wood') {
-      return '<div class="pick big" data-i="' + i + '">' +
-        '<span class="pt">补给</span>' +
-        '<canvas data-icon="wood" width="44" height="44"></canvas>' +
-        '<div class="pn" style="color:#e8c07a">木材 +' + card.amt + '</div>' +
-        '<div class="pd">从漂浮的残骸里拖回来的建材</div>' +
-        '</div>';
-    }
-    return '<div class="pick big" data-i="' + i + '">' +
-      '<span class="pt">修整</span>' +
-      '<canvas data-icon="repair" width="44" height="44"></canvas>' +
-      '<div class="pn" style="color:#86e0b0">修复 +' + card.amt + '</div>' +
-      '<div class="pd">把漏水的舱室补一补</div>' +
+  function rewardText(r) {
+    if (!r) return '无奖励';
+    if (r.type === 'module') return '模块 · ' + D.MODULES[r.id].name;
+    if (r.type === 'upgrade') return '改造 · ' + D.UPGRADES[r.id].name;
+    if (r.type === 'relic') return '遗物 · ' + D.RELICS[r.id].name;
+    if (r.type === 'wood') return '木材 +' + r.amt;
+    if (r.type === 'repair') return '修复 +' + r.amt;
+    return '';
+  }
+
+  function routeIconFor(r) {
+    if (!r) return 'none';
+    if (r.type === 'module') return r.id;
+    if (r.type === 'relic') return 'relic';
+    if (r.type === 'upgrade') return 'upgrade';
+    return r.type;
+  }
+
+  var TONE = { safe: '#86e0b0', mid: '#7fc8e8', risk: '#ffcf8a', elite: '#ff8b6b' };
+
+  function routeCardHTML(opt, i) {
+    var tone = TONE[opt.tone] || '#9dc4d6';
+    return '<div class="pick" data-i="' + i + '">' +
+      '<span class="pt" style="color:' + tone + ';border-color:' + tone + '">' + opt.tag + '</span>' +
+      '<canvas data-icon="' + routeIconFor(opt.reward) + '" width="44" height="44"></canvas>' +
+      '<div class="pn" style="color:' + tone + '">' + opt.name + '</div>' +
+      '<div class="pd">' + opt.desc + '<br><span style="color:#e8c07a">' + rewardText(opt.reward) + '</span></div>' +
       '</div>';
   }
 
-  function showReward() {
-    var r = S.reward;
+  function showRoute() {
+    var r = S.route;
     var html = '<h2>第 ' + r.cleared + ' 次潮汐 · 退去</h2>' +
       '<div class="sub">击杀 ' + r.kills + ' · 木材 +' + r.wood + ' · 修复 +' + r.heal + '</div>' +
-      '<p>潮水退去，海面上浮起一些东西。<span class="hl">挑一件带走。</span></p>' +
-      '<div class="picks">' + r.cards.map(cardHTML).join('') + '</div>';
+      '<p>下一次潮汐已经在酝酿。<span class="hl">你要迎哪一场？</span></p>' +
+      '<div class="picks">' + r.options.map(routeCardHTML).join('') + '</div>' +
+      '<p class="hintline">难度越高，奖励越好 —— 但你只能选一场。</p>';
     openModal(html);
-
     Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
-      el.addEventListener('click', function () {
-        var i = parseInt(el.dataset.i, 10);
-        pickCard(i);
-      });
+      el.addEventListener('click', function () { pickRoute(parseInt(el.dataset.i, 10)); });
     });
+    paintPickIcons();
+  }
+
+  function paintPickIcons() {
     Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
       var key = cnv.dataset.icon;
       var ictx = cnv.getContext('2d');
+      var i;
       if (key === 'wood') {
         ictx.fillStyle = '#a97b46';
         rr(ictx, 8, 14, 28, 12, 3); ictx.fill();
@@ -2308,34 +2467,46 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         ictx.moveTo(22, 8); ictx.lineTo(22, 36);
         ictx.moveTo(8, 22); ictx.lineTo(36, 22);
         ictx.stroke();
+      } else if (key === 'relic') {
+        ictx.fillStyle = '#f2e06b';
+        ictx.beginPath();
+        ictx.moveTo(22, 6); ictx.lineTo(34, 22); ictx.lineTo(22, 38); ictx.lineTo(10, 22);
+        ictx.closePath(); ictx.fill();
+        ictx.fillStyle = '#0f1e2a';
+        ictx.beginPath();
+        ictx.moveTo(22, 14); ictx.lineTo(28, 22); ictx.lineTo(22, 30); ictx.lineTo(16, 22);
+        ictx.closePath(); ictx.fill();
       } else if (key === 'upgrade') {
         ictx.strokeStyle = '#f2e06b';
         ictx.lineWidth = 2.4;
         ictx.beginPath();
         ictx.arc(22, 22, 9, 0, Math.PI * 2);
         ictx.stroke();
-        for (var a = 0; a < 6; a++) {
-          var ang = a * Math.PI / 3;
+        for (i = 0; i < 6; i++) {
+          var ang = i * Math.PI / 3;
           ictx.beginPath();
           ictx.moveTo(22 + Math.cos(ang) * 10, 22 + Math.sin(ang) * 10);
           ictx.lineTo(22 + Math.cos(ang) * 15, 22 + Math.sin(ang) * 15);
           ictx.stroke();
         }
-      } else {
+      } else if (key !== 'none') {
         var d = D.MODULES[key];
-        drawIcon(ictx, d.icon, 22, 22, 14, d.color);
+        if (d) drawIcon(ictx, d.icon, 22, 22, 14, d.color);
       }
     });
   }
 
-  function pickCard(i) {
-    if (!S.reward) return;
-    C.applyCard(S.run, S.reward.cards[i]);
-    S.reward = null;
+  function pickRoute(i) {
+    if (!S.route) return;
+    var opt = S.route.options[i];
+    if (!opt) return;
+    S.route = null;
     closeModal();
+    C.applyRoute(S.run, opt);
+    C.planWave(S.run);
+    toast('迎战「' + opt.name + '」 · ' + rewardText(opt.reward));
     enterBuild();
   }
-
   function enterBuild() {
     S.phase = 'build';
     S.sel = null;
@@ -2368,7 +2539,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       '</div>' +
       '<div class="modal-actions"><button class="btn primary" id="btnRetry">再来一次</button></div>';
     openModal(html);
-    $('btnRetry').addEventListener('click', function () { newGame(); });
+    $('btnRetry').addEventListener('click', function () { showShipSelect(); });
   }
 
   function showVictory() {
@@ -2382,7 +2553,7 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       '</div>' +
       '<div class="modal-actions"><button class="btn primary" id="btnAgain">再漂一次</button></div>';
     openModal(html);
-    $('btnAgain').addEventListener('click', function () { newGame(); });
+    $('btnAgain').addEventListener('click', function () { showShipSelect(); });
   }
 
   function showHelp(first) {
@@ -2396,24 +2567,56 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
       '<div class="k">左右舷</div><div class="v">武器<b>打不到对侧</b>。没加固外侧列，就够不着远处的敌人</div>' +
       '<div class="k">射程</div><div class="v">射程按<b>列</b>算。靠边的炮更能覆盖自己这一侧</div>' +
       '<div class="k">潮汐词条</div><div class="v">每波可能带一个词条（<b>浓雾/蜂群/血月</b>…），会直接改这波的打法</div>' +
+      '<div class="k">路线</div><div class="v">每波结束<b>二选一/三选一</b>：难度是明牌，奖励也是明牌，但不能都要</div>' +
+      '<div class="k">遗物</div><div class="v">精英潮掉落，<b>整局改变规则</b>（探照灯 / 潮汐之子 / 扩建图纸…）</div>' +
       '<div class="k">满潮</div><div class="v">潮水涨满还没清场，敌人狂暴、船舱进水，基本必死</div>' +
       '</div>' +
       '<p class="hintline">左键选模块 → 点格子放置 · 点暗格加固 · 点已装模块拆除 · 右键/Esc 取消 · 空格开战</p>' +
       '<div class="modal-actions"><button class="btn primary" id="btnStart">' + (first ? '启 航' : '返 回') + '</button></div>';
     openModal(html);
     $('btnStart').addEventListener('click', function () {
-      if (first) { closeModal(); S.started = true; newGame(); }
+      if (first) { closeModal(); S.started = true; showShipSelect(); }
       else closeModal();
     });
   }
 
-  function newGame() {
-    S.run = C.newRun();
+  function showShipSelect() {
+    var html = '<h2>选择你的船</h2>' +
+      '<div class="sub">这一局的起点不一样，能走的路也不一样</div>' +
+      '<div class="picks">' + D.SHIP_ORDER.map(function (id) {
+        var sp = D.SHIPS[id];
+        return '<div class="pick" data-ship="' + id + '">' +
+          '<span class="pt">起点</span>' +
+          '<canvas width="44" height="44"></canvas>' +
+          '<div class="pn" style="color:' + sp.color + '">' + sp.name + '</div>' +
+          '<div class="pd">' + sp.desc +
+          '<br><span style="color:#5f8ea4">甲板 ' + sp.cols.length + ' 列 · 木材 ' + sp.wood + ' · 耐久 ' + sp.hp + '</span></div>' +
+          '</div>';
+      }).join('') + '</div>';
+    openModal(html);
+    Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
+      el.addEventListener('click', function () { newGame(el.dataset.ship); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.pick canvas'), function (cnv) {
+      var ictx = cnv.getContext('2d');
+      ictx.strokeStyle = '#9dc4d6';
+      ictx.lineWidth = 2.4;
+      ictx.beginPath();
+      ictx.moveTo(5, 27); ictx.lineTo(39, 27); ictx.lineTo(32, 37); ictx.lineTo(12, 37);
+      ictx.closePath(); ictx.stroke();
+      ictx.beginPath(); ictx.moveTo(22, 7); ictx.lineTo(22, 27); ictx.stroke();
+      ictx.beginPath(); ictx.moveTo(22, 9); ictx.lineTo(34, 23); ictx.lineTo(22, 23);
+      ictx.closePath(); ictx.stroke();
+    });
+  }
+
+  function newGame(shipId) {
+    S.run = C.newRun(undefined, shipId || 'barge');
     S.battle = null;
     S.phase = 'build';
     S.sel = null;
     S.started = true;
-    S.reward = null;
+    S.route = null;
     closeModal();
     syncUI();
   }
@@ -2515,6 +2718,9 @@ button.danger { border-color: #6d3b36; color: #e0a79c; }
         resolveBattle();
       }
       syncUI();
+      if (location.search.indexOf('select') >= 0) showShipSelect();
+      var mShip = location.search.match(/ship=(barge|gunboat|carrier)/);
+      if (mShip) newGame(mShip[1]);
     }
   } else {
     showHelp(true);
